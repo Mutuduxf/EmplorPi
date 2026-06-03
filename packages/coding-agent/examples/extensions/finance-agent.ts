@@ -196,9 +196,12 @@ const parseCsvFinancials = defineTool({
 	async execute(_toolCallId, params) {
 		const csv = await loadCsv(params.path);
 		const columnsWithValidAmounts = new Set<string>();
-		for (const row of csv.rows) {
+		const parsedAmounts = new Map<string, MoneyValue>();
+		for (const [rowIndex, row] of csv.rows.entries()) {
 			for (const header of csv.headers) {
-				if (!columnsWithValidAmounts.has(header) && parseMoney(row[header] ?? "").valid) {
+				const parsed = parseMoney(row[header] ?? "");
+				parsedAmounts.set(`${rowIndex}:${header}`, parsed);
+				if (!columnsWithValidAmounts.has(header) && parsed.valid) {
 					columnsWithValidAmounts.add(header);
 				}
 			}
@@ -210,9 +213,9 @@ const parseCsvFinancials = defineTool({
 		const totals = Object.fromEntries(
 			selectedColumns.map((column) => [
 				column,
-				csv.rows.reduce((sum, row) => {
-					const parsed = parseMoney(row[column] ?? "");
-					return parsed.valid ? sum + parsed.value : sum;
+				csv.rows.reduce((sum, _row, rowIndex) => {
+					const parsed = parsedAmounts.get(`${rowIndex}:${column}`);
+					return parsed?.valid ? sum + parsed.value : sum;
 				}, 0),
 			]),
 		);
@@ -221,7 +224,7 @@ const parseCsvFinancials = defineTool({
 		for (const [index, row] of csv.rows.entries()) {
 			for (const column of selectedColumns) {
 				const raw = row[column] ?? "";
-				if (raw.trim() && !parseMoney(raw).valid) {
+				if (raw.trim() && !parsedAmounts.get(`${index}:${column}`)?.valid) {
 					evidence.push({
 						path: params.path,
 						line: lineNumber(index),
@@ -475,20 +478,29 @@ const reconcileTransactions = defineTool({
 		const usedRight = new Set<number>();
 		const matches: Array<{ leftLine: number; rightLine: number; amount: number }> = [];
 		const unmatchedLeft: Evidence[] = [];
+		const leftCandidates = left.rows.map((leftRow, index) => ({
+			index,
+			amount: parseMoney(leftRow[leftAmountColumn] ?? ""),
+			date: leftDateColumn ? Date.parse(leftRow[leftDateColumn] ?? "") : undefined,
+		}));
 		const rightCandidates = right.rows.map((rightRow, index) => ({
 			index,
 			amount: parseMoney(rightRow[rightAmountColumn] ?? ""),
 			date: rightDateColumn ? Date.parse(rightRow[rightDateColumn] ?? "") : undefined,
 		}));
 
-		for (const [leftIndex, leftRow] of left.rows.entries()) {
-			const leftAmount = parseMoney(leftRow[leftAmountColumn] ?? "");
+		for (const leftCandidate of leftCandidates) {
+			const leftAmount = leftCandidate.amount;
 			if (!leftAmount.valid) {
-				unmatchedLeft.push({ path: params.leftPath, line: lineNumber(leftIndex), message: "Invalid left amount." });
+				unmatchedLeft.push({
+					path: params.leftPath,
+					line: lineNumber(leftCandidate.index),
+					message: "Invalid left amount.",
+				});
 				continue;
 			}
 
-			const leftDate = leftDateColumn ? Date.parse(leftRow[leftDateColumn] ?? "") : undefined;
+			const leftDate = leftCandidate.date;
 			const rightCandidate = rightCandidates.find((candidate) => {
 				if (usedRight.has(candidate.index)) return false;
 				const rightAmount = candidate.amount;
@@ -505,13 +517,13 @@ const reconcileTransactions = defineTool({
 			if (!rightCandidate) {
 				unmatchedLeft.push({
 					path: params.leftPath,
-					line: lineNumber(leftIndex),
+					line: lineNumber(leftCandidate.index),
 					message: `No matching transaction for amount ${leftAmount.raw}.`,
 				});
 			} else {
 				usedRight.add(rightCandidate.index);
 				matches.push({
-					leftLine: lineNumber(leftIndex),
+					leftLine: lineNumber(leftCandidate.index),
 					rightLine: lineNumber(rightCandidate.index),
 					amount: leftAmount.value,
 				});
