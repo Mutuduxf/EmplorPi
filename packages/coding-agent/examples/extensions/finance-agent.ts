@@ -73,14 +73,14 @@ function parseCsv(text: string): CsvData {
 	let row: string[] = [];
 	let quoted = false;
 
-	for (let index = 0; index < text.length; index++) {
-		const char = text[index];
-		const next = text[index + 1];
+	for (let charIndex = 0; charIndex < text.length; charIndex++) {
+		const char = text[charIndex];
+		const next = text[charIndex + 1];
 
 		if (quoted) {
 			if (char === '"' && next === '"') {
 				field += '"';
-				index++;
+				charIndex++;
 			} else if (char === '"') {
 				quoted = false;
 			} else {
@@ -109,13 +109,13 @@ function parseCsv(text: string): CsvData {
 		rows.push(row);
 	}
 
-	const [headerRow = [], ...dataRows] = rows.filter((values) => values.some((value) => value.trim().length > 0));
+	const [headerRow = [], ...dataRows] = rows.filter((fields) => fields.some((value) => value.trim().length > 0));
 	const headers = headerRow.map((header, index) => header.trim() || `column_${index + 1}`);
 
 	return {
 		headers,
-		rows: dataRows.map((values) =>
-			Object.fromEntries(headers.map((header, index) => [header, values[index]?.trim() ?? ""])),
+		rows: dataRows.map((rowValues) =>
+			Object.fromEntries(headers.map((header, index) => [header, rowValues[index]?.trim() ?? ""])),
 		),
 	};
 }
@@ -195,9 +195,17 @@ const parseCsvFinancials = defineTool({
 	}),
 	async execute(_toolCallId, params) {
 		const csv = await loadCsv(params.path);
+		const columnsWithValidAmounts = new Set<string>();
+		for (const row of csv.rows) {
+			for (const header of csv.headers) {
+				if (!columnsWithValidAmounts.has(header) && parseMoney(row[header] ?? "").valid) {
+					columnsWithValidAmounts.add(header);
+				}
+			}
+		}
 		const selectedColumns = params.amountColumns?.length
 			? params.amountColumns.filter((column) => csv.headers.includes(column))
-			: csv.headers.filter((header) => csv.rows.some((row) => parseMoney(row[header] ?? "").valid));
+			: csv.headers.filter((header) => columnsWithValidAmounts.has(header));
 
 		const totals = Object.fromEntries(
 			selectedColumns.map((column) => [
@@ -467,6 +475,11 @@ const reconcileTransactions = defineTool({
 		const usedRight = new Set<number>();
 		const matches: Array<{ leftLine: number; rightLine: number; amount: number }> = [];
 		const unmatchedLeft: Evidence[] = [];
+		const rightCandidates = right.rows.map((rightRow, index) => ({
+			index,
+			amount: parseMoney(rightRow[rightAmountColumn] ?? ""),
+			date: rightDateColumn ? Date.parse(rightRow[rightDateColumn] ?? "") : undefined,
+		}));
 
 		for (const [leftIndex, leftRow] of left.rows.entries()) {
 			const leftAmount = parseMoney(leftRow[leftAmountColumn] ?? "");
@@ -476,26 +489,30 @@ const reconcileTransactions = defineTool({
 			}
 
 			const leftDate = leftDateColumn ? Date.parse(leftRow[leftDateColumn] ?? "") : undefined;
-			const rightIndex = right.rows.findIndex((rightRow, candidateIndex) => {
-				if (usedRight.has(candidateIndex)) return false;
-				const rightAmount = parseMoney(rightRow[rightAmountColumn] ?? "");
+			const rightCandidate = rightCandidates.find((candidate) => {
+				if (usedRight.has(candidate.index)) return false;
+				const rightAmount = candidate.amount;
 				if (!rightAmount.valid || Math.abs(leftAmount.value - rightAmount.value) > amountTolerance) return false;
 				if (!leftDateColumn || !rightDateColumn || Number.isNaN(leftDate)) return true;
-				const rightDate = Date.parse(rightRow[rightDateColumn] ?? "");
-				return !Number.isNaN(rightDate) && Math.abs((leftDate ?? 0) - rightDate) <= dateWindowMs;
+				const rightDate = candidate.date;
+				return (
+					typeof rightDate === "number" &&
+					!Number.isNaN(rightDate) &&
+					Math.abs((leftDate ?? 0) - rightDate) <= dateWindowMs
+				);
 			});
 
-			if (rightIndex === -1) {
+			if (!rightCandidate) {
 				unmatchedLeft.push({
 					path: params.leftPath,
 					line: lineNumber(leftIndex),
 					message: `No matching transaction for amount ${leftAmount.raw}.`,
 				});
 			} else {
-				usedRight.add(rightIndex);
+				usedRight.add(rightCandidate.index);
 				matches.push({
 					leftLine: lineNumber(leftIndex),
-					rightLine: lineNumber(rightIndex),
+					rightLine: lineNumber(rightCandidate.index),
 					amount: leftAmount.value,
 				});
 			}
@@ -555,7 +572,7 @@ const detectAnomalies = defineTool({
 		const keyColumns =
 			params.keyColumns?.filter((column) => csv.headers.includes(column)) ??
 			[dateColumn, amountColumn, getColumn(csv.headers, undefined, ["description", "vendor", "merchant"])].filter(
-				(column): column is string => Boolean(column),
+				(maybeColumn): maybeColumn is string => Boolean(maybeColumn),
 			);
 		const seen = new Map<string, number>();
 		const evidence: Evidence[] = [];
