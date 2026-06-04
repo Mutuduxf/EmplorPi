@@ -253,8 +253,61 @@ export {
 } from "./core/system-prompt.ts";
 // Timings
 export { printTimings, resetTimings, time } from "./core/timings.ts";
-// Tool executor interface (to be implemented by consumers)
+// Tool types and factories
 export type { ToolExecuteResult, ToolExecutor } from "./core/tools/types.ts";
+
+// File system and operational tools
+export {
+	type BashOperations,
+	type BashSpawnContext,
+	type BashToolDetails,
+	type BashToolInput,
+	type BashToolOptions,
+	createBashToolDefinition,
+	createLocalBashOperations,
+	type EditOperations,
+	type EditToolDetails,
+	type EditToolInput,
+	type EditToolOptions,
+	createEditToolDefinition,
+	type FindOperations,
+	type FindToolDetails,
+	type FindToolInput,
+	type FindToolOptions,
+	createFindToolDefinition,
+	type GrepOperations,
+	type GrepToolDetails,
+	type GrepToolInput,
+	type GrepToolOptions,
+	createGrepToolDefinition,
+	type LsOperations,
+	type LsToolDetails,
+	type LsToolInput,
+	type LsToolOptions,
+	createLsToolDefinition,
+	type ReadOperations,
+	type ReadToolDetails,
+	type ReadToolInput,
+	type ReadToolOptions,
+	createReadToolDefinition,
+	type WriteOperations,
+	type WriteToolInput,
+	type WriteToolOptions,
+	createWriteToolDefinition,
+	createWriteTool,
+} from "./core/tools/index.ts";
+
+export {
+	withFileMutationQueue,
+	DEFAULT_MAX_BYTES,
+	DEFAULT_MAX_LINES,
+	formatSize,
+	type TruncationOptions,
+	type TruncationResult,
+	truncateHead,
+	truncateLine,
+	truncateTail,
+} from "./core/tools/index.ts";
 // Migrations
 export { runMigrations, showDeprecationWarnings } from "./migrations.ts";
 export { spawnProcess, spawnProcessSync, waitForChildProcess } from "./utils/child-process.ts";

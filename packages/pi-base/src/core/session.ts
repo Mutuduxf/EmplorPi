@@ -148,6 +148,9 @@ export class AgentSession {
 	private _compactionAbortController: AbortController | undefined;
 	private _autoCompactionAbortController: AbortController | undefined;
 	private _branchSummaryAbortController: AbortController | undefined;
+	private _overflowRecoveryAttempted = false;
+	private _lastAssistantMessage: any;
+	private _retryAbortController: AbortController | undefined;
 	private _retryAttempt = 0;
 	private _extensionRunner!: ExtensionRunner;
 	private _customTools: ToolDefinition[];

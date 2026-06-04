@@ -5,11 +5,17 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { TSchema } from "typebox";
 
-export function wrapToolDefinition<TParams extends TSchema>(tool: AgentTool<TParams>): AgentTool<TParams> {
+export function wrapToolDefinition(
+	tool: any,
+	..._args: any[]
+): any {
 	return tool;
 }
 
-export function wrapToolDefinitions<TParams extends TSchema>(tools: AgentTool<TParams>[]): AgentTool<TParams>[] {
+export function wrapToolDefinitions(
+	tools: any[],
+	..._args: any[]
+): any[] {
 	return tools;
 }
 

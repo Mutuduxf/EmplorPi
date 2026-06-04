@@ -1,5 +1,5 @@
 /**
- * Theme types - minimal stub for compatibility with extension types.
+ * Theme types - minimal stub for pi-base.
  * Full implementation lives in @earendil-works/pi-coding-agent.
  */
 
@@ -7,6 +7,9 @@ import type { Component } from "@earendil-works/pi-tui";
 
 export interface Theme {
 	name: string;
+	fg: (color: string, str: string) => string;
+	bg: (color: string, str: string) => string;
+	bold: (str: string) => string;
 	[key: string]: unknown;
 }
 
@@ -15,4 +18,46 @@ export interface ThemeColor {
 	bg?: string;
 }
 
-export type { Component };
+export { type Component };
+
+export function getLanguageFromPath(_path: string): string | undefined {
+	const ext = _path.split(".").pop()?.toLowerCase();
+	const langMap: Record<string, string> = {
+		ts: "typescript",
+		tsx: "typescript",
+		js: "javascript",
+		jsx: "javascript",
+		rs: "rust",
+		py: "python",
+		go: "go",
+		java: "java",
+		cpp: "cpp",
+		c: "c",
+		h: "c",
+		hpp: "cpp",
+		md: "markdown",
+		json: "json",
+		yaml: "yaml",
+		yml: "yaml",
+		toml: "toml",
+		sh: "bash",
+		bash: "bash",
+		zsh: "bash",
+		html: "html",
+		css: "css",
+		sql: "sql",
+		rb: "ruby",
+	};
+	return ext ? langMap[ext] : undefined;
+}
+
+export function highlightCode(_code: string, _language: string): string {
+	return _code;
+}
+
+export const theme: Theme = {
+	name: "default",
+	fg: (_color: string, str: string) => str,
+	bg: (_color: string, str: string) => str,
+	bold: (str: string) => str,
+};

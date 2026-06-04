@@ -1,74 +1,75 @@
 /**
- * Minimal stub for compatibility with extension types.
- * Full implementation lives in @earendil-works/pi-coding-agent.
+ * Operational tool definitions for pi-base.
+ * These are general-purpose file system and shell tools.
  */
 
-export interface BashToolInput {
-	command: string;
-}
+export {
+	type BashOperations,
+	type BashSpawnContext,
+	type BashToolDetails,
+	type BashToolInput,
+	type BashToolOptions,
+	createBashToolDefinition,
+	createLocalBashOperations,
+} from "./bash.ts";
 
-export interface ReadToolInput {
-	path: string;
-}
+export {
+	type EditOperations,
+	type EditToolDetails,
+	type EditToolInput,
+	type EditToolOptions,
+	createEditToolDefinition,
+} from "./edit.ts";
 
-export interface EditToolInput {
-	path: string;
-	oldText: string;
-	newText: string;
-}
+export {
+	type FindOperations,
+	type FindToolDetails,
+	type FindToolInput,
+	type FindToolOptions,
+	createFindToolDefinition,
+} from "./find.ts";
 
-export interface WriteToolInput {
-	path: string;
-	content: string;
-}
+export {
+	type GrepOperations,
+	type GrepToolDetails,
+	type GrepToolInput,
+	type GrepToolOptions,
+	createGrepToolDefinition,
+} from "./grep.ts";
 
-export interface GrepToolInput {
-	pattern: string;
-	path?: string;
-}
+export {
+	type LsOperations,
+	type LsToolDetails,
+	type LsToolInput,
+	type LsToolOptions,
+	createLsToolDefinition,
+} from "./ls.ts";
 
-export interface FindToolInput {
-	pattern: string;
-	path?: string;
-}
+export {
+	type ReadOperations,
+	type ReadToolDetails,
+	type ReadToolInput,
+	type ReadToolOptions,
+	createReadToolDefinition,
+} from "./read.ts";
 
-export interface LsToolInput {
-	path: string;
-}
+export {
+	type WriteOperations,
+	type WriteToolInput,
+	type WriteToolOptions,
+	createWriteToolDefinition,
+	createWriteTool,
+} from "./write.ts";
 
-export interface BashToolDetails {
-	command: string;
-	stdout: string;
-	stderr: string;
-	exitCode: number;
-}
+export { withFileMutationQueue } from "./file-mutation-queue.ts";
 
-export interface ReadToolDetails {
-	path: string;
-	content: string;
-}
-
-export interface EditToolDetails {
-	path: string;
-	oldText: string;
-	newText: string;
-}
-
-export interface WriteToolDetails {
-	path: string;
-}
-
-export interface GrepToolDetails {
-	pattern: string;
-	matches: number;
-}
-
-export interface FindToolDetails {
-	pattern: string;
-	results: string[];
-}
-
-export interface LsToolDetails {
-	path: string;
-	entries: string[];
-}
+export {
+	DEFAULT_MAX_BYTES,
+	DEFAULT_MAX_LINES,
+	formatSize,
+	type TruncationOptions,
+	type TruncationResult,
+	truncateHead,
+	truncateLine,
+	truncateTail,
+} from "./truncate.ts";
