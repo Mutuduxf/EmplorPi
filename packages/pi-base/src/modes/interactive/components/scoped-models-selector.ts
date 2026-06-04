@@ -232,7 +232,7 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 	}
 
 	handleInput(data: string): void {
-		const kb = getKeybindings() as any;
+		const kb = getKeybindings();
 
 		// Navigation
 		if (kb.matches(data, "tui.select.up")) {

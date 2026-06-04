@@ -1,52 +1,107 @@
 /**
- * Process execution utilities for pi-base.
+ * Shared command execution utilities for extensions and custom tools.
  */
 
 import { spawn } from "node:child_process";
+import { waitForChildProcess } from "../utils/child-process.ts";
 
+/**
+ * Options for executing shell commands.
+ */
 export interface ExecOptions {
-	timeoutMs?: number;
+	/** AbortSignal to cancel the command */
+	signal?: AbortSignal;
+	/** Timeout in milliseconds */
+	timeout?: number;
+	/** Working directory */
 	cwd?: string;
 }
 
+/**
+ * Result of executing a shell command.
+ */
 export interface ExecResult {
 	stdout: string;
 	stderr: string;
-	exitCode: number | null;
+	code: number;
+	killed: boolean;
 }
 
-export function execCommand(
+/**
+ * Execute a shell command and return stdout/stderr/code.
+ * Supports timeout and abort signal.
+ */
+export async function execCommand(
 	command: string,
 	args: string[],
-	_cwd?: string | ExecOptions,
+	cwd: string,
 	options?: ExecOptions,
 ): Promise<ExecResult> {
-	return new Promise((resolve, reject) => {
-		const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+	return new Promise((resolve) => {
+		const proc = spawn(command, args, {
+			cwd,
+			shell: false,
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+
 		let stdout = "";
 		let stderr = "";
-		let timeout: NodeJS.Timeout | undefined;
+		let killed = false;
+		let timeoutId: NodeJS.Timeout | undefined;
 
-		if (options?.timeoutMs) {
-			timeout = setTimeout(() => {
-				child.kill();
-				reject(new Error(`Command timed out after ${options.timeoutMs}ms`));
-			}, options.timeoutMs);
+		const killProcess = () => {
+			if (!killed) {
+				killed = true;
+				proc.kill("SIGTERM");
+				// Force kill after 5 seconds if SIGTERM doesn't work
+				setTimeout(() => {
+					if (!proc.killed) {
+						proc.kill("SIGKILL");
+					}
+				}, 5000);
+			}
+		};
+
+		// Handle abort signal
+		if (options?.signal) {
+			if (options.signal.aborted) {
+				killProcess();
+			} else {
+				options.signal.addEventListener("abort", killProcess, { once: true });
+			}
 		}
 
-		child.stdout.on("data", (data: Buffer) => {
+		// Handle timeout
+		if (options?.timeout && options.timeout > 0) {
+			timeoutId = setTimeout(() => {
+				killProcess();
+			}, options.timeout);
+		}
+
+		proc.stdout?.on("data", (data) => {
 			stdout += data.toString();
 		});
-		child.stderr.on("data", (data: Buffer) => {
+
+		proc.stderr?.on("data", (data) => {
 			stderr += data.toString();
 		});
-		child.on("close", (code) => {
-			if (timeout) clearTimeout(timeout);
-			resolve({ stdout, stderr, exitCode: code });
-		});
-		child.on("error", (err) => {
-			if (timeout) clearTimeout(timeout);
-			reject(err);
-		});
+
+		// Wait for process termination without hanging on inherited stdio handles
+		// held open by detached descendants.
+		waitForChildProcess(proc)
+			.then((code) => {
+				if (timeoutId) clearTimeout(timeoutId);
+				if (options?.signal) {
+					options.signal.removeEventListener("abort", killProcess);
+				}
+				resolve({ stdout, stderr, code: code ?? 0, killed });
+			})
+			.catch((_err) => {
+				if (timeoutId) clearTimeout(timeoutId);
+				if (options?.signal) {
+					options.signal.removeEventListener("abort", killProcess);
+				}
+				resolve({ stdout, stderr, code: 1, killed });
+			});
 	});
 }

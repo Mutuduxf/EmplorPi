@@ -94,6 +94,9 @@ function getInferredNpmInstall(): { root: string; prefix: string } | undefined {
 	if (!root) return undefined;
 	const rootParent = path.dirname(root);
 	if (path.basename(rootParent) === "lib") return { root, prefix: path.dirname(rootParent) };
+	// Windows global npm prefixes use `<prefix>\\node_modules`, which is
+	// indistinguishable from local project installs by path shape alone. Do not
+	// infer unsupported Windows custom prefixes without `npm root -g` evidence.
 	return undefined;
 }
 
@@ -332,20 +335,23 @@ export function getUpdateInstruction(packageName: string): string {
 // =============================================================================
 
 /**
- * Get the base directory for resolving package assets.
+ * Get the base directory for resolving package assets (themes, package.json, README.md, CHANGELOG.md).
  * - For Bun binary: returns the directory containing the executable
  * - For Node.js (dist/): returns __dirname (the dist/ directory)
  * - For tsx (src/): returns parent directory (the package root)
  */
 export function getPackageDir(): string {
+	// Allow override via environment variable (useful for Nix/Guix where store paths tokenize poorly)
 	const envDir = process.env.PI_PACKAGE_DIR;
 	if (envDir) {
 		return normalizePath(envDir);
 	}
 
 	if (isBunBinary) {
+		// Bun binary: process.execPath points to the compiled executable
 		return dirname(process.execPath);
 	}
+	// Node.js: walk up from __dirname until we find package.json
 	let dir = __dirname;
 	while (dir !== dirname(dir)) {
 		if (existsSync(join(dir, "package.json"))) {
@@ -353,7 +359,39 @@ export function getPackageDir(): string {
 		}
 		dir = dirname(dir);
 	}
+	// Fallback (shouldn't happen)
 	return __dirname;
+}
+
+/**
+ * Get path to built-in themes directory (shipped with package)
+ * - For Bun binary: theme/ next to executable
+ * - For Node.js (dist/): dist/modes/interactive/theme/
+ * - For tsx (src/): src/modes/interactive/theme/
+ */
+export function getThemesDir(): string {
+	if (isBunBinary) {
+		return join(getPackageDir(), "theme");
+	}
+	// Theme is in modes/interactive/theme/ relative to src/ or dist/
+	const packageDir = getPackageDir();
+	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
+	return join(packageDir, srcOrDist, "modes", "interactive", "theme");
+}
+
+/**
+ * Get path to HTML export template directory (shipped with package)
+ * - For Bun binary: export-html/ next to executable
+ * - For Node.js (dist/): dist/core/export-html/
+ * - For tsx (src/): src/core/export-html/
+ */
+export function getExportTemplateDir(): string {
+	if (isBunBinary) {
+		return join(getPackageDir(), "export-html");
+	}
+	const packageDir = getPackageDir();
+	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
+	return join(packageDir, srcOrDist, "core", "export-html");
 }
 
 /** Get path to package.json */
@@ -381,6 +419,26 @@ export function getChangelogPath(): string {
 	return resolve(join(getPackageDir(), "CHANGELOG.md"));
 }
 
+/**
+ * Get path to built-in interactive assets directory.
+ * - For Bun binary: assets/ next to executable
+ * - For Node.js (dist/): dist/modes/interactive/assets/
+ * - For tsx (src/): src/modes/interactive/assets/
+ */
+export function getInteractiveAssetsDir(): string {
+	if (isBunBinary) {
+		return join(getPackageDir(), "assets");
+	}
+	const packageDir = getPackageDir();
+	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
+	return join(packageDir, srcOrDist, "modes", "interactive", "assets");
+}
+
+/** Get path to a bundled interactive asset */
+export function getBundledInteractiveAssetPath(name: string): string {
+	return join(getInteractiveAssetsDir(), name);
+}
+
 // =============================================================================
 // App Config (from package.json piConfig)
 // =============================================================================
@@ -403,12 +461,13 @@ try {
 }
 
 const piConfigName: string | undefined = pkg.piConfig?.name;
-export const PACKAGE_NAME: string = pkg.name || "@earendil-works/pi-base";
+export const PACKAGE_NAME: string = pkg.name || "@earendil-works/pi-coding-agent";
 export const APP_NAME: string = piConfigName || "pi";
 export const APP_TITLE: string = piConfigName ? APP_NAME : "π";
 export const CONFIG_DIR_NAME: string = pkg.piConfig?.configDir || ".pi";
 export const VERSION: string = pkg.version || "0.0.0";
 
+// e.g., PI_CODING_AGENT_DIR or TAU_CODING_AGENT_DIR
 export const ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`;
 export const ENV_SESSION_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_SESSION_DIR`;
 
@@ -419,7 +478,6 @@ export function expandTildePath(path: string): string {
 const DEFAULT_SHARE_VIEWER_URL = "https://pi.dev/session/";
 
 /** Get the share viewer URL for a gist ID */
-export function getBundledInteractiveAssetPath(_name: string): string { return ""; }
 export function getShareViewerUrl(gistId: string): string {
 	const baseUrl = process.env.PI_SHARE_VIEWER_URL || DEFAULT_SHARE_VIEWER_URL;
 	return `${baseUrl}#${gistId}`;
@@ -438,6 +496,11 @@ export function getAgentDir(): string {
 	return join(homedir(), CONFIG_DIR_NAME, "agent");
 }
 
+/** Get path to user's custom themes directory */
+export function getCustomThemesDir(): string {
+	return join(getAgentDir(), "themes");
+}
+
 /** Get path to models.json */
 export function getModelsPath(): string {
 	return join(getAgentDir(), "models.json");
@@ -451,6 +514,11 @@ export function getAuthPath(): string {
 /** Get path to settings.json */
 export function getSettingsPath(): string {
 	return join(getAgentDir(), "settings.json");
+}
+
+/** Get path to tools directory */
+export function getToolsDir(): string {
+	return join(getAgentDir(), "tools");
 }
 
 /** Get path to managed binaries directory (fd, rg) */

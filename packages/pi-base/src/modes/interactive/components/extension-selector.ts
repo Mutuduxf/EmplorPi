@@ -89,7 +89,7 @@ export class ExtensionSelectorComponent extends Container {
 	}
 
 	handleInput(keyData: string): void {
-		const kb = getKeybindings() as any;
+		const kb = getKeybindings();
 		if (kb.matches(keyData, "app.tools.expand")) {
 			this.onToggleToolsExpanded?.();
 		} else if (kb.matches(keyData, "tui.select.up") || keyData === "k") {

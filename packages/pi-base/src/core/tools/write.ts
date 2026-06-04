@@ -83,7 +83,7 @@ function rebuildWriteHighlightCacheFull(rawPath: string | null, fileContent: str
 		lang,
 		rawContent: fileContent,
 		normalizedLines: normalized.split("\n"),
-		highlightedLines: highlightCode(normalized, lang) as any,
+		highlightedLines: highlightCode(normalized, lang),
 	};
 }
 
@@ -147,7 +147,7 @@ function formatWriteCall(
 		const renderedLines = lang
 			? (cache?.highlightedLines ?? highlightCode(replaceTabs(normalizeDisplayText(fileContent)), lang))
 			: normalizeDisplayText(fileContent).split("\n");
-		const lines = trimTrailingEmptyLines(renderedLines as any);
+		const lines = trimTrailingEmptyLines(renderedLines);
 		const totalLines = lines.length;
 		const maxLines = options.expanded ? lines.length : 10;
 		const displayLines = lines.slice(0, maxLines);

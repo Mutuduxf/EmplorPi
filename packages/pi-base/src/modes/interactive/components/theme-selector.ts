@@ -25,7 +25,7 @@ export class ThemeSelectorComponent extends Container {
 
 		// Get available themes and create select items
 		const themes = getAvailableThemes();
-		const themeItems: SelectItem[] = themes.map((name: any) => ({
+		const themeItems: SelectItem[] = themes.map((name) => ({
 			value: name,
 			label: name,
 			description: name === currentTheme ? "(current)" : undefined,

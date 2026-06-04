@@ -219,8 +219,10 @@ export class FooterComponent implements Component {
 
 		// Add extension statuses on a single line, sorted by key alphabetically
 		const extensionStatuses = this.footerData.getExtensionStatuses();
-		if (extensionStatuses.length > 0) {
-			const sortedStatuses = extensionStatuses.map((text) => sanitizeStatusText(text));
+		if (extensionStatuses.size > 0) {
+			const sortedStatuses = Array.from(extensionStatuses.entries())
+				.sort(([a], [b]) => a.localeCompare(b))
+				.map(([, text]) => sanitizeStatusText(text));
 			const statusLine = sortedStatuses.join(" ");
 			// Truncate to terminal width with dim ellipsis for consistency with footer style
 			lines.push(truncateToWidth(statusLine, width, theme.fg("dim", "...")));

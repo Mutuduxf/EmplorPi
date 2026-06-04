@@ -278,7 +278,7 @@ class SessionList implements Component, Focusable {
 	private showCwd = false;
 	private sortMode: SortMode = "threaded";
 	private nameFilter: NameFilter = "all";
-	private keybindings!: KeybindingsManager;
+	private keybindings: KeybindingsManager;
 	private showPath = false;
 	private confirmingDeletePath: string | null = null;
 	private currentSessionCanonicalPath?: string;
@@ -516,7 +516,7 @@ class SessionList implements Component, Focusable {
 	}
 
 	handleInput(keyData: string): void {
-		const kb = getKeybindings() as any;
+		const kb = getKeybindings();
 
 		// Handle delete confirmation state first - intercept all keys
 		if (this.confirmingDeletePath !== null) {
@@ -671,7 +671,7 @@ async function deleteSessionFile(
 export class SessionSelectorComponent extends Container implements Focusable {
 	handleInput(data: string): void {
 		if (this.mode === "rename") {
-			const kb = getKeybindings() as any;
+			const kb = getKeybindings();
 			if (kb.matches(data, "tui.select.cancel")) {
 				this.exitRenameMode();
 				return;
@@ -686,7 +686,7 @@ export class SessionSelectorComponent extends Container implements Focusable {
 	private canRename = true;
 	private sessionList: SessionList;
 	private header: SessionSelectorHeader;
-	private keybindings!: KeybindingsManager;
+	private keybindings: KeybindingsManager;
 	private scope: SessionScope = "current";
 	private sortMode: SortMode = "threaded";
 	private nameFilter: NameFilter = "all";
@@ -748,7 +748,7 @@ export class SessionSelectorComponent extends Container implements Focusable {
 		currentSessionFilePath?: string,
 	) {
 		super();
-const km = new (class {})();
+		this.keybindings = options?.keybindings ?? KeybindingsManager.create();
 		this.currentSessionsLoader = currentSessionsLoader;
 		this.allSessionsLoader = allSessionsLoader;
 		this.onCancel = onCancel;

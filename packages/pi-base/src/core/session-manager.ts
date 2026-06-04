@@ -1051,20 +1051,6 @@ export class SessionManager {
 	}
 
 	/**
-	 * Set the session display name.
-	 */
-	setSessionName(name: string): void {
-		const id = generateId(this.byId);
-		this._appendEntry({
-			type: "session_info",
-			id,
-			parentId: this.leafId,
-			timestamp: new Date().toISOString(),
-			name,
-		});
-	}
-
-	/**
 	 * Append a custom message entry (for extensions) that participates in LLM context.
 	 * @param customType Extension identifier for filtering on reload
 	 * @param content Message content (string or TextContent/ImageContent array)

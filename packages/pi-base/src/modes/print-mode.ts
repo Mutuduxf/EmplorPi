@@ -1,14 +1,15 @@
 /**
  * Print mode (single-shot): Send prompts, output result, exit.
  *
- * Used for single-turn agent invocations.
- * - "text" mode: outputs the final assistant response as plain text
- * - "json" mode: outputs all events as JSON lines
+ * Used for:
+ * - `pi -p "prompt"` - text output
+ * - `pi --mode json "prompt"` - JSON event stream
  */
 
 import type { AssistantMessage, ImageContent } from "@earendil-works/pi-ai";
-import type { AgentSession } from "../core/session.ts";
+import type { AgentSessionRuntime } from "../core/agent-session-runtime.ts";
 import { flushRawStdout, writeRawStdout } from "../core/output-guard.ts";
+import { killTrackedDetachedChildren } from "../utils/shell.ts";
 
 /**
  * Options for print mode.
@@ -18,7 +19,7 @@ export interface PrintModeOptions {
 	mode: "text" | "json";
 	/** Array of additional prompts to send after initialMessage */
 	messages?: string[];
-	/** First message to send */
+	/** First message to send (may contain @file content) */
 	initialMessage?: string;
 	/** Images to attach to the initial message */
 	initialImages?: ImageContent[];
@@ -28,10 +29,84 @@ export interface PrintModeOptions {
  * Run in print (single-shot) mode.
  * Sends prompts to the agent and outputs the result.
  */
-export async function runPrintMode(session: AgentSession, options: PrintModeOptions): Promise<number> {
+export async function runPrintMode(runtimeHost: AgentSessionRuntime, options: PrintModeOptions): Promise<number> {
 	const { mode, messages = [], initialMessage, initialImages } = options;
 	let exitCode = 0;
+	let session = runtimeHost.session;
 	let unsubscribe: (() => void) | undefined;
+	let disposed = false;
+	const signalCleanupHandlers: Array<() => void> = [];
+
+	const disposeRuntime = async (): Promise<void> => {
+		if (disposed) return;
+		disposed = true;
+		unsubscribe?.();
+		await runtimeHost.dispose();
+	};
+
+	const registerSignalHandlers = (): void => {
+		const signals: NodeJS.Signals[] = ["SIGTERM"];
+		if (process.platform !== "win32") {
+			signals.push("SIGHUP");
+		}
+
+		for (const signal of signals) {
+			const handler = () => {
+				killTrackedDetachedChildren();
+				void disposeRuntime().finally(() => {
+					process.exit(signal === "SIGHUP" ? 129 : 143);
+				});
+			};
+			process.on(signal, handler);
+			signalCleanupHandlers.push(() => process.off(signal, handler));
+		}
+	};
+
+	registerSignalHandlers();
+
+	runtimeHost.setRebindSession(async () => {
+		await rebindSession();
+	});
+
+	const rebindSession = async (): Promise<void> => {
+		session = runtimeHost.session;
+		await session.bindExtensions({
+			mode: mode === "json" ? "json" : "print",
+			commandContextActions: {
+				waitForIdle: () => session.agent.waitForIdle(),
+				newSession: async (newSessionOptions) => runtimeHost.newSession(newSessionOptions),
+				fork: async (entryId, forkOptions) => {
+					const result = await runtimeHost.fork(entryId, forkOptions);
+					return { cancelled: result.cancelled };
+				},
+				navigateTree: async (targetId, navigateOptions) => {
+					const result = await session.navigateTree(targetId, {
+						summarize: navigateOptions?.summarize,
+						customInstructions: navigateOptions?.customInstructions,
+						replaceInstructions: navigateOptions?.replaceInstructions,
+						label: navigateOptions?.label,
+					});
+					return { cancelled: result.cancelled };
+				},
+				switchSession: async (sessionPath, switchOptions) => {
+					return runtimeHost.switchSession(sessionPath, switchOptions);
+				},
+				reload: async () => {
+					await session.reload();
+				},
+			},
+			onError: (err) => {
+				console.error(`Extension error (${err.extensionPath}): ${err.error}`);
+			},
+		});
+
+		unsubscribe?.();
+		unsubscribe = session.subscribe((event) => {
+			if (mode === "json") {
+				writeRawStdout(`${JSON.stringify(event)}\n`);
+			}
+		});
+	};
 
 	try {
 		if (mode === "json") {
@@ -41,11 +116,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 			}
 		}
 
-		if (mode === "json") {
-			unsubscribe = session.subscribe((event) => {
-				writeRawStdout(`${JSON.stringify(event)}\n`);
-			});
-		}
+		await rebindSession();
 
 		if (initialMessage) {
 			await session.prompt(initialMessage, { images: initialImages });
@@ -79,7 +150,10 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 		console.error(error instanceof Error ? error.message : String(error));
 		return 1;
 	} finally {
-		unsubscribe?.();
+		for (const cleanup of signalCleanupHandlers) {
+			cleanup();
+		}
+		await disposeRuntime();
 		await flushRawStdout();
 	}
 }

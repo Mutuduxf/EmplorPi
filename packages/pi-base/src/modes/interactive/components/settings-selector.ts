@@ -247,7 +247,7 @@ export class SettingsSelectorComponent extends Container {
 				description:
 					"Maximum idle gap while waiting for HTTP headers or body chunks. Disable for local models that pause longer than five minutes.",
 				currentValue: formatHttpIdleTimeoutMs(config.httpIdleTimeoutMs),
-				values: HTTP_IDLE_TIMEOUT_CHOICES.map((choice: any) => choice.label),
+				values: HTTP_IDLE_TIMEOUT_CHOICES.map((choice) => choice.label),
 			},
 			{
 				id: "hide-thinking",
@@ -494,9 +494,9 @@ export class SettingsSelectorComponent extends Container {
 						callbacks.onTransportChange(newValue as Transport);
 						break;
 					case "http-idle-timeout": {
-						const choice = HTTP_IDLE_TIMEOUT_CHOICES.find((item) => (item as any).label === newValue);
+						const choice = HTTP_IDLE_TIMEOUT_CHOICES.find((item) => item.label === newValue);
 						if (choice) {
-							callbacks.onHttpIdleTimeoutMsChange((choice as any).timeoutMs);
+							callbacks.onHttpIdleTimeoutMsChange(choice.timeoutMs);
 						}
 						break;
 					}

@@ -147,7 +147,7 @@ function deepMergeSettings(base: Settings, overrides: Settings): Settings {
 }
 
 function parseTimeoutSetting(value: unknown, settingName: string): number | undefined {
-	const timeoutMs = parseHttpIdleTimeoutMs(value as string | undefined);
+	const timeoutMs = parseHttpIdleTimeoutMs(value);
 	if (timeoutMs !== undefined) {
 		return timeoutMs;
 	}

@@ -178,7 +178,7 @@ function formatReadResult(
 	const output = getTextOutput(result, showImages);
 	const lang = rawPath ? getLanguageFromPath(rawPath) : undefined;
 	const renderedLines = lang ? highlightCode(replaceTabs(output), lang) : output.split("\n");
-	const lines = trimTrailingEmptyLines(renderedLines as any);
+	const lines = trimTrailingEmptyLines(renderedLines);
 	const maxLines = options.expanded ? lines.length : 10;
 	const displayLines = lines.slice(0, maxLines);
 	const remaining = lines.length - maxLines;
@@ -249,19 +249,19 @@ export function createReadToolDefinition(
 								const buffer = await ops.readFile(absolutePath);
 								if (autoResizeImages) {
 									// Resize image if needed before sending it back to the model.
-									const resized = await resizeImage(buffer as any, mimeType as any);
+									const resized = await resizeImage(buffer, mimeType);
 									if (!resized) {
 										let textNote = `Read image file [${mimeType}]\n[Image omitted: could not be resized below the inline image size limit.]`;
 										if (nonVisionImageNote) textNote += `\n${nonVisionImageNote}`;
 										content = [{ type: "text", text: textNote }];
 									} else {
-										const dimensionNote = (formatDimensionNote as any)(resized);
+										const dimensionNote = formatDimensionNote(resized);
 										let textNote = `Read image file [${resized.mimeType}]`;
 										if (dimensionNote) textNote += `\n${dimensionNote}`;
 										if (nonVisionImageNote) textNote += `\n${nonVisionImageNote}`;
 										content = [
 											{ type: "text", text: textNote },
-											{ type: "image", data: resized.data as any, mimeType: resized.mimeType },
+											{ type: "image", data: resized.data, mimeType: resized.mimeType },
 										];
 									}
 								} else {

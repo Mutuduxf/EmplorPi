@@ -95,16 +95,15 @@ function buildGroups(resolved: ResolvedPaths): ResourceGroup[] {
 	const addToGroup = (resources: ResolvedResource[], resourceType: ResourceType) => {
 		for (const res of resources) {
 			const { path, enabled, metadata } = res;
-			const meta = metadata ?? {} as any;
-			const groupKey = `${meta.origin}:${meta.scope}:${meta.source}:${meta.baseDir ?? ""}`;
+			const groupKey = `${metadata.origin}:${metadata.scope}:${metadata.source}:${metadata.baseDir ?? ""}`;
 
 			if (!groupMap.has(groupKey)) {
 				groupMap.set(groupKey, {
 					key: groupKey,
-					label: getGroupLabel(meta),
-					scope: meta.scope,
-					origin: meta.origin,
-					source: meta.source,
+					label: getGroupLabel(metadata),
+					scope: metadata.scope,
+					origin: metadata.origin,
+					source: metadata.source,
 					subgroups: [],
 				});
 			}
@@ -132,6 +131,15 @@ function buildGroups(resolved: ResolvedPaths): ResourceGroup[] {
 			} else {
 				displayName = fileName;
 			}
+			subgroup.items.push({
+				path,
+				enabled,
+				metadata,
+				resourceType,
+				displayName,
+				groupKey,
+				subgroupKey,
+			});
 		}
 	};
 

@@ -6,7 +6,7 @@ import type { AppKeybinding, KeybindingsManager } from "../../../core/keybinding
  */
 export class CustomEditor extends Editor {
 	private keybindings: KeybindingsManager;
-	public actionHandlers: Map<string, () => void> = new Map();
+	public actionHandlers: Map<AppKeybinding, () => void> = new Map();
 
 	// Special handlers that can be dynamically replaced
 	public onEscape?: () => void;
@@ -23,7 +23,7 @@ export class CustomEditor extends Editor {
 	/**
 	 * Register a handler for an app action.
 	 */
-	onAction(action: string, handler: () => void): void {
+	onAction(action: AppKeybinding, handler: () => void): void {
 		this.actionHandlers.set(action, handler);
 	}
 
@@ -34,7 +34,7 @@ export class CustomEditor extends Editor {
 		}
 
 		// Check for paste image keybinding
-		if ((this.keybindings as any).matches(data, "app.clipboard.pasteImage")) {
+		if (this.keybindings.matches(data, "app.clipboard.pasteImage")) {
 			this.onPasteImage?.();
 			return;
 		}
@@ -42,7 +42,7 @@ export class CustomEditor extends Editor {
 		// Check app keybindings first
 
 		// Escape/interrupt - only if autocomplete is NOT active
-		if ((this.keybindings as any).matches(data, "app.interrupt")) {
+		if (this.keybindings.matches(data, "app.interrupt")) {
 			if (!this.isShowingAutocomplete()) {
 				// Use dynamic onEscape if set, otherwise registered handler
 				const handler = this.onEscape ?? this.actionHandlers.get("app.interrupt");
@@ -57,7 +57,7 @@ export class CustomEditor extends Editor {
 		}
 
 		// Exit (Ctrl+D) - only when editor is empty
-		if ((this.keybindings as any).matches(data, "app.exit")) {
+		if (this.keybindings.matches(data, "app.exit")) {
 			if (this.getText().length === 0) {
 				const handler = this.onCtrlD ?? this.actionHandlers.get("app.exit");
 				if (handler) handler();
@@ -68,7 +68,7 @@ export class CustomEditor extends Editor {
 
 		// Check all other app actions
 		for (const [action, handler] of this.actionHandlers) {
-			if (action !== "app.interrupt" && action !== "app.exit" && (this.keybindings as any).matches(data, action)) {
+			if (action !== "app.interrupt" && action !== "app.exit" && this.keybindings.matches(data, action)) {
 				handler();
 				return;
 			}

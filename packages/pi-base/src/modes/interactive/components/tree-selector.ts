@@ -897,7 +897,7 @@ class TreeList implements Component {
 	}
 
 	handleInput(keyData: string): void {
-		const kb = getKeybindings() as any;
+		const kb = getKeybindings();
 		if (kb.matches(keyData, "tui.select.up")) {
 			this.selectedIndex = this.selectedIndex === 0 ? this.filteredNodes.length - 1 : this.selectedIndex - 1;
 		} else if (kb.matches(keyData, "tui.select.down")) {
@@ -1118,7 +1118,7 @@ class LabelInput implements Component, Focusable {
 	}
 
 	handleInput(keyData: string): void {
-		const kb = getKeybindings() as any;
+		const kb = getKeybindings();
 		if (kb.matches(keyData, "tui.select.confirm")) {
 			const value = this.input.getValue().trim();
 			this.onSubmit?.(this.entryId, value || undefined);

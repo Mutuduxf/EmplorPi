@@ -1,24 +1,48 @@
 /**
- * Keybinding hints - minimal stub for pi-base.
- * Full implementation lives in @earendil-works/pi-coding-agent.
+ * Utilities for formatting keybinding hints in the UI.
  */
 
-export function keyHint(_key: string, _description?: string): string {
-	return `[${_key}]`;
+import { getKeybindings, type Keybinding, type KeyId } from "@earendil-works/pi-tui";
+import { theme } from "../theme/theme.ts";
+
+export interface KeyTextFormatOptions {
+	capitalize?: boolean;
 }
 
-export function keyText(_key: string, _description?: string): string {
-	return _key;
+function formatKeyPart(part: string, options: KeyTextFormatOptions): string {
+	const displayPart = process.platform === "darwin" && part.toLowerCase() === "alt" ? "option" : part;
+	return options.capitalize ? displayPart.charAt(0).toUpperCase() + displayPart.slice(1) : displayPart;
 }
 
-export function rawKeyHint(_key: string, _description?: string): string {
-	return `[${_key}]`;
+export function formatKeyText(key: string, options: KeyTextFormatOptions = {}): string {
+	return key
+		.split("/")
+		.map((k) =>
+			k
+				.split("+")
+				.map((part) => formatKeyPart(part, options))
+				.join("+"),
+		)
+		.join("/");
 }
 
-export function formatKeyText(_key: string): string {
-	return _key;
+function formatKeys(keys: KeyId[], options: KeyTextFormatOptions = {}): string {
+	if (keys.length === 0) return "";
+	return formatKeyText(keys.join("/"), options);
 }
 
-export function keyDisplayText(_key: string): string {
-	return _key;
+export function keyText(keybinding: Keybinding): string {
+	return formatKeys(getKeybindings().getKeys(keybinding));
+}
+
+export function keyDisplayText(keybinding: Keybinding): string {
+	return formatKeys(getKeybindings().getKeys(keybinding), { capitalize: true });
+}
+
+export function keyHint(keybinding: Keybinding, description: string): string {
+	return theme.fg("dim", keyText(keybinding)) + theme.fg("muted", ` ${description}`);
+}
+
+export function rawKeyHint(key: string, description: string): string {
+	return theme.fg("dim", formatKeyText(key)) + theme.fg("muted", ` ${description}`);
 }
