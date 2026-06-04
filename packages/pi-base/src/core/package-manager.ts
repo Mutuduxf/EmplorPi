@@ -12,8 +12,20 @@ export interface PathMetadata {
 	baseDir?: string;
 }
 
+export interface ResolvedResource {
+	path: string;
+	type: "file" | "directory";
+	source: string;
+	enabled?: boolean;
+	metadata?: Record<string, unknown>;
+}
+
 export interface ResolvedPaths {
-	paths: PathMetadata[];
+	paths: ResolvedResource[];
+	extensions: ResolvedResource[];
+	skills: ResolvedResource[];
+	prompts: ResolvedResource[];
+	themes: ResolvedResource[];
 }
 
 export interface PackageManager {

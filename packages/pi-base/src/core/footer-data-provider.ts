@@ -5,5 +5,5 @@
 
 export interface ReadonlyFooterDataProvider {
 	getBranchName(): string | undefined;
-	getExtensionStatuses(): string[];
+	getExtensionStatuses(): string[]; getGitBranch(): string | undefined; getAvailableProviderCount(): number; getContextUsage(): any; size: number; localeCompare: any;
 }

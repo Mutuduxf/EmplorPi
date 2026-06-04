@@ -102,7 +102,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 		addAutocompleteProvider() {},
 		setEditorComponent() {},
 		getEditorComponent() { return undefined; },
-		get theme() { return { name: "default", fg: (_c: string, s: string) => s, bg: (_c: string, s: string) => s, bold: (s: string) => s }; },
+		get theme() { return { name: "default", fg: (_c: string, s: string) => s, bg: (_c: string, s: string) => s, bold: (s: string) => s, italic: (s: string) => s }; },
 		getAllThemes() { return []; },
 		getTheme(_name: string) { return undefined; },
 		setTheme(_theme: any) { return { success: false, error: "Theme switching not supported in RPC mode" }; },
