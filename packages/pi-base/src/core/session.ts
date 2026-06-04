@@ -278,6 +278,15 @@ export class AgentSession {
 	get isCompacting(): boolean {
 		return !!this._compactionAbortController || !!this._autoCompactionAbortController;
 	}
+
+	get steeringMode(): "all" | "one-at-a-time" {
+		return this.agent.steeringMode;
+	}
+
+	get followUpMode(): "all" | "one-at-a-time" {
+		return this.agent.followUpMode;
+	}
+
 	get messages(): AgentMessage[] {
 		return this.agent.state.messages;
 	}
@@ -497,13 +506,25 @@ export class AgentSession {
 	// Session Management
 	// =========================================================================
 
-	newSession(sessionId: string): void {
-		this.sessionManager.newSession({ id: sessionId });
+	newSession(sessionId?: string): void {
+		this.sessionManager.newSession(sessionId ? { id: sessionId } : undefined);
 		this.agent.state.model = undefined as any;
 		this.agent.state.messages = [];
 		this.agent.state.tools = [];
 		this.agent.state.systemPrompt = "";
 		this.agent.state.thinkingLevel = DEFAULT_THINKING_LEVEL;
+	}
+
+	setSessionName(name: string): void {
+		this.sessionManager.setSessionName(name);
+	}
+
+	setSteeringMode(mode: "all" | "one-at-a-time"): void {
+		this.agent.steeringMode = mode;
+	}
+
+	setFollowUpMode(mode: "all" | "one-at-a-time"): void {
+		this.agent.followUpMode = mode;
 	}
 
 	private async _autoCompact(reason: "manual" | "threshold" | "overflow"): Promise<void> {

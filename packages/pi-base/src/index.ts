@@ -8,6 +8,20 @@
  * so that it can be reused by agents that don't need file/bash/edit tools.
  */
 
+// Modes (I/O layer)
+export { runPrintMode, type PrintModeOptions } from "./modes/print-mode.ts";
+export { runRpcMode } from "./modes/rpc/rpc-mode.ts";
+export { attachJsonlLineReader, serializeJsonLine } from "./modes/rpc/jsonl.ts";
+export type {
+	RpcCommand,
+	RpcCommandType,
+	RpcExtensionUIRequest,
+	RpcExtensionUIResponse,
+	RpcResponse,
+	RpcSessionState,
+	RpcSlashCommand,
+} from "./modes/rpc/rpc-types.ts";
+
 // CLI args
 export { type Args, parseArgs, printHelp } from "./cli/args.ts";
 // Config paths
