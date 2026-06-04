@@ -1,0 +1,63 @@
+{
+	"name": "@earendil-works/pi-base",
+	"version": "0.78.0",
+	"description": "Generic foundation layer for LLM-powered agents: session management, model registry, auth, events, and extension system",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"clean": "shx rm -rf dist",
+		"build": "tsgo -p tsconfig.build.json",
+		"test": "vitest --run",
+		"prepublishOnly": "npm run clean && npm run build"
+	},
+	"dependencies": {
+		"@earendil-works/pi-agent-core": "^0.78.0",
+		"@earendil-works/pi-ai": "^0.78.0",
+		"@earendil-works/pi-tui": "^0.78.0",
+		"chalk": "5.6.2",
+		"cross-spawn": "7.0.6",
+		"ignore": "7.0.5",
+		"proper-lockfile": "4.1.2",
+		"typebox": "1.1.38",
+		"yaml": "2.9.0"
+	},
+	"devDependencies": {
+		"@types/cross-spawn": "6.0.6",
+		"@types/node": "24.12.4",
+		"@types/proper-lockfile": "4.1.4",
+		"shx": "0.4.0",
+		"typescript": "5.9.3",
+		"vitest": "3.2.4"
+	},
+	"keywords": [
+		"ai",
+		"agent",
+		"llm",
+		"session",
+		"model-registry",
+		"auth",
+		"extensions"
+	],
+	"author": "Mario Zechner",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/earendil-works/pi.git",
+		"directory": "packages/pi-base"
+	},
+	"engines": {
+		"node": ">=22.19.0"
+	}
+}
