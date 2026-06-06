@@ -1,11 +1,11 @@
 # Upstream Sync Guide
 
-`@earendil-works/pi-base` is a **verbatim subset** of `@earendil-works/pi-coding-agent`'s source tree.
+`@earendil-works/agent-base` is a **verbatim subset** of `@earendil-works/pi-coding-agent`'s source tree.
 This document describes how to keep it in sync when the upstream (coding-agent) changes.
 
 ## Principle
 
-**Zero internal modifications.** Every `.ts` file in `pi-base/src/` is an unmodified copy from
+**Zero internal modifications.** Every `.ts` file in `agent-base/src/` is an unmodified copy from
 `packages/coding-agent/src/`. The only differences are file-level deletions and two stub files
 for a deleted subtree.
 
@@ -22,9 +22,9 @@ This guarantees:
 | `src/bun/` | Bun binary CLI entry point — pi-specific, not reusable |
 | `src/core/export-html/` | Coding session HTML export — tied to tool rendering internals |
 
-### pi-base-Specific Files
+### agent-base-Specific Files
 
-These files exist **only** in pi-base and have no upstream counterpart:
+These files exist **only** in agent-base and have no upstream counterpart:
 
 | File | Purpose |
 |---|---|
@@ -48,19 +48,19 @@ not verbatim copies.
 ### Full sync (recommended)
 
 ```bash
-# 1. Copy all source files from coding-agent (overwrites pi-base/src/)
-rm -rf packages/pi-base/src
-cp -r packages/coding-agent/src packages/pi-base/src
+# 1. Copy all source files from coding-agent (overwrites agent-base/src/)
+rm -rf packages/agent-base/src
+cp -r packages/coding-agent/src packages/agent-base/src
 
 # 2. Re-apply the two deletions
-rm -rf packages/pi-base/src/bun
-rm -rf packages/pi-base/src/core/export-html
+rm -rf packages/agent-base/src/bun
+rm -rf packages/agent-base/src/core/export-html
 
 # 3. Re-create the two stubs
-mkdir -p packages/pi-base/src/core/export-html/vendor
+mkdir -p packages/agent-base/src/core/export-html/vendor
 
-cat > packages/pi-base/src/core/export-html/index.ts << 'EOF'
-/** Stub for pi-base */
+cat > packages/agent-base/src/core/export-html/index.ts << 'EOF'
+/** Stub for agent-base */
 import type { SessionManager, FileEntry } from "../session-manager.ts";
 export type AgentState = { messages: any[]; model: any; systemPrompt: string; tools: any[]; thinkingLevel: string; };
 export interface ToolHtmlRenderer { renderTool(): string; }
@@ -68,8 +68,8 @@ export function exportSessionToHtml(_sm: SessionManager, _state: AgentState, _op
 export function exportFromFile(_path: string, _outputPath?: string): Promise<string> { return Promise.resolve(""); }
 EOF
 
-cat > packages/pi-base/src/core/export-html/tool-renderer.ts << 'EOF'
-/** Stub for pi-base */
+cat > packages/agent-base/src/core/export-html/tool-renderer.ts << 'EOF'
+/** Stub for agent-base */
 export interface ToolHtmlRendererOptions {
   getToolDefinition: (name: string) => any;
   theme: any;
@@ -84,7 +84,7 @@ EOF
 #    (see packages/coding-agent/package.json → dependencies)
 
 # 5. Build and verify
-cd packages/pi-base
+cd packages/agent-base
 npm run build
 ```
 
@@ -96,7 +96,7 @@ cd packages/coding-agent
 git log --oneline --name-only HEAD~5..HEAD -- src/
 
 # Copy only the changed files
-cd ../../pi-base
+cd ../../agent-base
 for f in $(cd ../coding-agent && git diff --name-only HEAD~5..HEAD -- src/); do
   cp "../coding-agent/$f" "$f"
 done
@@ -113,7 +113,7 @@ npm run build
 
 ```bash
 # Check that the only differences are the intended deletions
-diff -r packages/coding-agent/src packages/pi-base/src \
+diff -r packages/coding-agent/src packages/agent-base/src \
   --exclude=bun --exclude=export-html \
   | head -20
 
@@ -125,16 +125,16 @@ diff -r packages/coding-agent/src packages/pi-base/src \
 | Upstream change | Required action |
 |---|---|
 | New file in `src/` | Auto-included by full copy. Check if pi-specific → add to deletion list |
-| File deleted upstream | Auto-reflected — pi-base deletes it on next sync |
+| File deleted upstream | Auto-reflected — agent-base deletes it on next sync |
 | File moved/renamed | Update the copy command accordingly |
-| New npm dependency | Copy to pi-base's `package.json` |
-| New exports in `src/index.ts` | No action needed — pi-base uses the same index.ts |
+| New npm dependency | Copy to agent-base's `package.json` |
+| New exports in `src/index.ts` | No action needed — agent-base uses the same index.ts |
 | Changes to `config.ts` | Auto-included. Package name resolution is runtime (from `package.json`), not hardcoded |
 
 ## Key Files That Must Stay Identical
 
 Every file in `src/` except the two stubs above must remain byte-identical to its
-coding-agent counterpart. If you need pi-base-specific behavior, implement it in:
+coding-agent counterpart. If you need agent-base-specific behavior, implement it in:
 
 - **New files** added to `src/` (they won't conflict with upstream)
 - **`package.json`** (dependencies, name, config)

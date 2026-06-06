@@ -75,7 +75,7 @@
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/earendil-works/pi.git",
-		"directory": "packages/pi-base"
+		"directory": "packages/agent-base"
 	},
 	"engines": {
 		"node": ">=22.19.0"
