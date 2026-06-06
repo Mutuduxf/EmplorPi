@@ -221,6 +221,9 @@ export {
 	SettingsManager,
 	type SettingsManagerCreateOptions,
 } from "./core/settings-manager.ts";
+// Generic system prompt (domain-agnostic; BuildSystemPromptOptions type exported from extensions)
+export { buildSystemPrompt } from "./core/system-prompt-base.ts";
+
 // Skills
 export {
 	formatSkillsForPrompt,

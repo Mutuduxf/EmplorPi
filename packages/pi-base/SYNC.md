@@ -22,16 +22,15 @@ This guarantees:
 | `src/bun/` | Bun binary CLI entry point — pi-specific, not reusable |
 | `src/core/export-html/` | Coding session HTML export — tied to tool rendering internals |
 
-### Permanently Divergent Files
+### pi-base-Specific Files
 
-These files are **modified** from upstream to remove coding-specific content.
-They will always produce a diff against coding-agent's versions.
+These files exist **only** in pi-base and have no upstream counterpart:
 
-| File | What changed |
+| File | Purpose |
 |---|---|
-| `src/core/system-prompt.ts` | Replaced "coding assistant" default prompt with generic AI assistant prompt.
-  Removed hardcoded default tool list `["read", "bash", "edit", "write"]` and
-  pi-specific documentation references (`getReadmePath()`, `getDocsPath()`, etc.). |
+| `src/core/system-prompt-base.ts` | Generic AI assistant prompt — no coding-specific defaults.
+  Exported from `index.ts` as `buildSystemPrompt`. Consumers who want the
+  coding-agent's original prompt import from `./core/system-prompt.ts` instead. |
 
 Two stub files were **created** (not copied from upstream) to satisfy import references in
 kept files:

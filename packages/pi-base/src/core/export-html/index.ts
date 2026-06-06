@@ -1,4 +1,3 @@
-/** Stub for pi-base */
 import type { SessionManager, FileEntry } from "../session-manager.ts";
 export type AgentState = { messages: any[]; model: any; systemPrompt: string; tools: any[]; thinkingLevel: string; };
 export interface ToolHtmlRenderer { renderTool(): string; }
