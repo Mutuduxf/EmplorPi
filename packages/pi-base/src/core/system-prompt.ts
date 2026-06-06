@@ -1,32 +1,21 @@
 /**
- * System prompt construction and project context loading
- *
- * Generic version — no hardcoded references to coding, pi, or specific tools.
- * Domain agents provide their own identity via customPrompt or skills.
+ * System prompt construction - generic version.
+ * No coding-specific defaults. Domain agents provide identity via customPrompt.
  */
 
 import { formatSkillsForPrompt, type Skill } from "./skills.ts";
 
 export interface BuildSystemPromptOptions {
-	/** Custom system prompt (replaces default). */
 	customPrompt?: string;
-	/** Tools to include in prompt. Default: [] */
 	selectedTools?: string[];
-	/** Optional one-line tool snippets keyed by tool name. */
 	toolSnippets?: Record<string, string>;
-	/** Additional guideline bullets appended to the default system prompt guidelines. */
 	promptGuidelines?: string[];
-	/** Text to append to system prompt. */
 	appendSystemPrompt?: string;
-	/** Working directory. */
 	cwd: string;
-	/** Pre-loaded context files. */
 	contextFiles?: Array<{ path: string; content: string }>;
-	/** Pre-loaded skills. */
 	skills?: Skill[];
 }
 
-/** Build the system prompt with tools, guidelines, and context */
 export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	const {
 		customPrompt,
@@ -38,98 +27,65 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 		contextFiles: providedContextFiles,
 		skills: providedSkills,
 	} = options;
-	const resolvedCwd = cwd;
-	const promptCwd = resolvedCwd.replace(/\\/g, "/");
-
-	const now = new Date();
-	const year = now.getFullYear();
-	const month = String(now.getMonth() + 1).padStart(2, "0");
-	const day = String(now.getDate()).padStart(2, "0");
-	const date = `${year}-${month}-${day}`;
-
+	const promptCwd = cwd.replace(/\\/g, "/");
+	const date = new Date().toISOString().slice(0, 10);
 	const appendSection = appendSystemPrompt ? `\n\n${appendSystemPrompt}` : "";
-
 	const contextFiles = providedContextFiles ?? [];
 	const skills = providedSkills ?? [];
 
 	if (customPrompt) {
-		let prompt = customPrompt;
-
-		if (appendSection) {
-			prompt += appendSection;
-		}
-
-		// Append project context files
+		let p = customPrompt;
+		if (appendSection) p += appendSection;
 		if (contextFiles.length > 0) {
-			prompt += "\n\n<project_context>\n\n";
-			prompt += "Project-specific instructions and guidelines:\n\n";
-			for (const { path: filePath, content } of contextFiles) {
-				prompt += `<project_instructions path="${filePath}">\n${content}\n</project_instructions>\n\n`;
+			p += "\n\n<project_context>\n\nProject-specific instructions:\n\n";
+			for (const { path: fp, content } of contextFiles) {
+				p += `<project_instructions path="${fp}">\n${content}\n</project_instructions>\n\n`;
 			}
-			prompt += "</project_context>\n";
+			p += "</project_context>\n";
 		}
-
-		// Append skills section
-		if (skills.length > 0) {
-			prompt += formatSkillsForPrompt(skills);
-		}
-
-		prompt += `\nCurrent date: ${date}`;
-		prompt += `\nCurrent working directory: ${promptCwd}`;
-
-		return prompt;
+		if (skills.length > 0) p += formatSkillsForPrompt(skills);
+		p += `\nCurrent date: ${date}\nCurrent working directory: ${promptCwd}`;
+		return p;
 	}
 
-	// Build tools list based on selected tools.
 	const tools = selectedTools ?? [];
-	const visibleTools = tools.filter((name) => !!toolSnippets?.[name]);
+	const visibleTools = tools.filter((n) => !!toolSnippets?.[n]);
 	const toolsList =
-		visibleTools.length > 0 ? visibleTools.map((name) => `- ${name}: ${toolSnippets![name]}`).join("\n") : "(none)";
+		visibleTools.length > 0
+			? visibleTools.map((n) => `- ${n}: ${toolSnippets![n]}`).join("\n")
+			: "(none)";
 
-	// Build guidelines
-	const guidelinesList: string[] = [];
-	const guidelinesSet = new Set<string>();
-	const addGuideline = (guideline: string): void => {
-		if (guidelinesSet.has(guideline)) return;
-		guidelinesSet.add(guideline);
-		guidelinesList.push(guideline);
-	};
+	const guidelines = (promptGuidelines ?? [])
+		.filter((g) => g.trim())
+		.map((g) => `- ${g.trim()}`)
+		.join("\n");
 
-	for (const guideline of promptGuidelines ?? []) {
-		const normalized = guideline.trim();
-		if (normalized.length > 0) addGuideline(normalized);
-	}
-
-	const guidelines = guidelinesList.map((g) => `- ${g}`).join("\n");
-
-	let prompt = `You are an AI assistant. You help users complete tasks using the available tools.
+	let p = `You are an AI assistant. You help users complete tasks using the available tools.
 
 Available tools:
 ${toolsList}
+`;
 
-${guidelines ? `Guidelines:\n${guidelines}\n` : ""}In addition to the tools above, you may have access to other custom tools depending on the project.`;
-
-	if (appendSection) {
-		prompt += appendSection;
+	if (guidelines) {
+		p += `\nGuidelines:\n${guidelines}\n`;
 	}
 
-	// Append project context files
+	p +=
+		"\nIn addition to the tools above, you may have access to other custom tools depending on the project.";
+
+	if (appendSection) p += appendSection;
+
 	if (contextFiles.length > 0) {
-		prompt += "\n\n<project_context>\n\n";
-		prompt += "Project-specific instructions and guidelines:\n\n";
-		for (const { path: filePath, content } of contextFiles) {
-			prompt += `<project_instructions path="${filePath}">\n${content}\n</project_instructions>\n\n`;
+		p += "\n\n<project_context>\n\nProject-specific instructions:\n\n";
+		for (const { path: fp, content } of contextFiles) {
+			p += `<project_instructions path="${fp}">\n${content}\n</project_instructions>\n\n`;
 		}
-		prompt += "</project_context>\n";
+		p += "</project_context>\n";
 	}
 
-	// Append skills section
-	if (skills.length > 0) {
-		prompt += formatSkillsForPrompt(skills);
-	}
+	if (skills.length > 0) p += formatSkillsForPrompt(skills);
 
-	prompt += `\nCurrent date: ${date}`;
-	prompt += `\nCurrent working directory: ${promptCwd}`;
+	p += `\nCurrent date: ${date}\nCurrent working directory: ${promptCwd}`;
 
-	return prompt;
+	return p;
 }
