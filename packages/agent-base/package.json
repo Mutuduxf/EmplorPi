@@ -1,5 +1,5 @@
 {
-	"name": "@earendil-works/pi-base",
+	"name": "@earendil-works/agent-base",
 	"version": "0.78.0",
 	"description": "Generic foundation layer for LLM-powered agents - derived from @earendil-works/pi-coding-agent",
 	"type": "module",
