@@ -95,9 +95,9 @@ $modeFlag = if ($Mode -eq "debug") { "" } else { "--compile" }
 Write-Host "Compiling sidecar (arch=$Arch, mode=$Mode)..." -ForegroundColor Yellow
 
 if ($Mode -eq "release") {
-  bun build ".\src-agent\index.ts" --compile --outfile "$BinariesDir\agent-sidecar" @targetFlag
+  bun build ".\src-agent\index.ts" --compile --outfile "$BinariesDir\agent-sidecar-x86_64-pc-windows-msvc" @targetFlag
 } else {
-  bun build ".\src-agent\index.ts" --outfile "$BinariesDir\agent-sidecar.js" @targetFlag
+  bun build ".\src-agent\index.ts" --outfile "$BinariesDir\agent-sidecar-x86_64-pc-windows-msvc.js" @targetFlag
 }
 
 if ($LASTEXITCODE -ne 0) {
@@ -137,19 +137,23 @@ New-Item -ItemType Directory -Force -Path "$OutDir\data\sessions" | Out-Null
 New-Item -ItemType Directory -Force -Path "$OutDir\resources\skills" | Out-Null
 
 # Copy Tauri executable
+$CargoExeName = "my-agent.exe"
 $tauriExe = Join-Path $ReleaseDir $ExeName
+$cargoExe = Join-Path $ReleaseDir $CargoExeName
 if (Test-Path $tauriExe) {
   Copy-Item $tauriExe "$OutDir\$ExeName" -Force
+} elseif (Test-Path $cargoExe) {
+  Copy-Item $cargoExe "$OutDir\$ExeName" -Force
+  Write-Host "[OK] Tauri exe copied (from $CargoExeName)" -ForegroundColor Green
 } else {
-  Write-Host "WARNING: Tauri exe not found at $tauriExe" -ForegroundColor Yellow
-  Write-Host "  The MSI installer may have been created instead." -ForegroundColor Yellow
-  Write-Host "  Check: $TauriOutput" -ForegroundColor Yellow
+  Write-Host "WARNING: Tauri exe not found" -ForegroundColor Yellow
 }
 
 # Copy sidecar
 $sidecarExe = Join-Path $BinariesDir "$SidecarName"
 if (Test-Path $sidecarExe) {
   Copy-Item $sidecarExe "$OutDir\$SidecarName" -Force
+  if (Test-Path "$ScriptRoot\src-tauri\binaries\agent-sidecar.exe") { Copy-Item "$ScriptRoot\src-tauri\binaries\agent-sidecar.exe" "$OutDir\agent-sidecar.exe" -Force }
   Write-Host "[OK] Sidecar copied" -ForegroundColor Green
 } else {
   Write-Host "WARNING: Sidecar exe not found" -ForegroundColor Yellow
