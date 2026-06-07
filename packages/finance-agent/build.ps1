@@ -110,20 +110,18 @@ Write-Host "[OK] Sidecar built" -ForegroundColor Green
 
 Write-Host "`n=== Step 2/3: Build Tauri desktop shell ===" -ForegroundColor Cyan
 
-Push-Location $TargetDir
-try {
-  if ($Mode -eq "release") {
-    cargo build --release
-  } else {
-    cargo build
-  }
-
-  if ($LASTEXITCODE -ne 0) {
-    throw "Tauri build failed (exit code $LASTEXITCODE)"
-  }
-  Write-Host "[OK] Tauri shell built" -ForegroundColor Green
-} finally {
-  Pop-Location
+if (Test-Path "$TargetDir\Cargo.toml") {
+  Push-Location $TargetDir
+  try {
+    if ($Mode -eq "release") { cargo build --release }
+    else { cargo build }
+    if ($LASTEXITCODE -ne 0) { throw "Tauri build failed (exit code $LASTEXITCODE)" }
+    Write-Host "[OK] Tauri shell built" -ForegroundColor Green
+  } finally { Pop-Location }
+} else {
+  Write-Host "[SKIP] No src-tauri/Cargo.toml — Tauri shell not built" -ForegroundColor Yellow
+  Write-Host "  Sidecar only. To build full desktop app, scaffold from agent-tauri template:" -ForegroundColor Gray
+  Write-Host "    npx @earendil-works/agent-tauri scaffold ./my-agent" -ForegroundColor Gray
 }
 
 # ─── Step 3: Package portable bundle ───────────────────────
