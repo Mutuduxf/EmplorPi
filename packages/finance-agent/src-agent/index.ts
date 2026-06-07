@@ -13,6 +13,7 @@ import { Agent } from "@earendil-works/pi-agent-core";
 import {
   AgentSession,
   AuthStorage,
+  DefaultResourceLoader,
   InMemoryAuthStorageBackend,
   ModelRegistry,
   SettingsManager,
@@ -35,11 +36,13 @@ async function main() {
   }
 
   const agent = new Agent({});
+  const resourceLoader = new DefaultResourceLoader({ cwd: dataDir, agentDir: dataDir, noExtensions: true, noPromptTemplates: true });
   const session = new AgentSession({
     agent,
     sessionManager: SessionManager.create(dataDir, join(dataDir, "sessions"), true),
     settingsManager: SettingsManager.create(dataDir, dataDir),
     cwd: dataDir,
+    resourceLoader,
     toolExecutor: new FinanceTools(),
     modelRegistry: ModelRegistry.create(auth, join(dataDir, "models.json")),
   });
