@@ -56,5 +56,8 @@
 		"gaxios": {
 			"rimraf": "6.1.2"
 		}
+	},
+	"dependencies": {
+		"@earendil-works/agent-base": "file:packages/agent-base"
 	}
 }
