@@ -1,0 +1,29 @@
+{
+	"name": "@earendil-works/agent-tauri",
+	"version": "0.78.0",
+	"description": "Tauri desktop app scaffold for @earendil-works/agent-base — domain agent tools + skills = standalone executable",
+	"type": "module",
+	"files": [
+		"template"
+	],
+	"scripts": {
+		"scaffold": "node scripts/scaffold.mjs"
+	},
+	"keywords": [
+		"tauri",
+		"desktop",
+		"agent",
+		"llm",
+		"portable"
+	],
+	"author": "Mario Zechner",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/earendil-works/pi.git",
+		"directory": "packages/agent-tauri"
+	},
+	"engines": {
+		"node": ">=22.19.0"
+	}
+}

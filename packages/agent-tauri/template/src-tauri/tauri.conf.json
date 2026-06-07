@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-config/packages/schema/schema.json",
+  "productName": "My Agent",
+  "version": "0.1.0",
+  "identifier": "com.myagent.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build:frontend",
+    "beforeDevCommand": "npm run dev:frontend"
+  },
+  "app": {
+    "title": "My Agent",
+    "windows": [
+      {
+        "title": "My Agent",
+        "width": 900,
+        "height": 700
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "externalBin": ["binaries/agent-sidecar"],
+    "resources": ["../skills/"]
+  },
+  "plugins": {
+    "shell": {
+      "sidecar": true,
+      "scope": [
+        {
+          "name": "binaries/agent-sidecar",
+          "sidecar": true
+        }
+      ]
+    }
+  }
+}
