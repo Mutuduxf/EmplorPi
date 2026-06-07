@@ -16,10 +16,14 @@
 			"typebox": ["./node_modules/typebox"],
 			"@earendil-works/agent-base": ["./packages/agent-base/src/index.ts"],
 			"@earendil-works/agent-base/*": ["./packages/agent-base/src/*"],
+			"@earendil-works/finance-agent": ["./packages/finance-agent/src-agent/index.ts"],
+			"@earendil-works/finance-agent/*": ["./packages/finance-agent/src-agent/*"],
 			"@earendil-works/pi-tui": ["./packages/tui/src/index.ts"],
 			"@earendil-works/pi-tui/*": ["./packages/tui/src/*"],
 			"@earendil-works/pi-agent-old": ["./packages/agent-old/src/index.ts"],
-			"@earendil-works/pi-agent-old/*": ["./packages/agent-old/src/*"]
+			"@earendil-works/pi-agent-old/*": ["./packages/agent-old/src/*"],
+			"@earendil-works/agent-tauri": ["./packages/agent-tauri/template/src-agent/index.ts"],
+			"@earendil-works/agent-tauri/*": ["./packages/agent-tauri/template/src-agent/*"],
 		}
 	},
 	"include": ["packages/*/src/**/*", "packages/*/test/**/*", "packages/coding-agent/examples/**/*"],

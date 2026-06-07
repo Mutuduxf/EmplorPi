@@ -1,0 +1,22 @@
+{
+	"name": "@earendil-works/finance-agent",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "tsx src-agent/index.ts",
+		"dev:rpc": "tsx src-agent/index.ts --mode rpc",
+		"build:sidecar": "bun build ./src-agent/index.ts --compile --outfile ./dist/finance-sidecar",
+		"build:tauri": "bun run build:sidecar && cd src-tauri && cargo build --release"
+	},
+	"dependencies": {
+		"@earendil-works/agent-base": "^0.78.0",
+		"@earendil-works/pi-ai": "^0.78.0",
+		"@earendil-works/pi-agent-core": "^0.78.0"
+	},
+	"devDependencies": {
+		"tsx": "^4.0.0",
+		"typescript": "5.9.3",
+		"@types/node": "^22"
+	}
+}
