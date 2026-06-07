@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance Agent</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f5f5f5; }
+    #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+    .msg { max-width: 80%; padding: 10px 14px; border-radius: 8px; white-space: pre-wrap; }
+    .user { background: #e3f2fd; align-self: flex-end; }
+    .assistant { background: #fff; align-self: flex-start; border: 1px solid #e0e0e0; }
+    .label { font-size: 12px; color: #666; margin-bottom: 4px; }
+    #input-bar { display: flex; gap: 8px; padding: 12px 16px; background: #fff; border-top: 1px solid #e0e0e0; }
+    #input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+    #send { padding: 10px 20px; background: #1976d2; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    #send:disabled { background: #90caf9; cursor: not-allowed; }
+    #status { font-size: 12px; color: #999; padding: 4px 16px; }
+  </style>
+</head>
+<body>
+  <div id="messages"></div>
+  <div id="status">Ready</div>
+  <div id="input-bar">
+    <input id="input" type="text" placeholder="Ask about a stock..." autofocus>
+    <button id="send" onclick="send()">Send</button>
+  </div>
+
+  <script>
+    const messages = document.getElementById('messages');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+    const status = document.getElementById('status');
+
+    // Try loading Tauri API
+    let invoke = async (cmd, args) => { throw new Error('Tauri not available'); };
+    try {
+      if (window.__TAURI__) {
+        invoke = window.__TAURI__.core.invoke;
+      }
+    } catch(e) {}
+
+    function addMsg(role, text) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + role;
+      div.innerHTML = '<div class="label">' + (role === 'user' ? 'You' : 'Agent') + '</div>' + text;
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    async function send() {
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      addMsg('user', text);
+      sendBtn.disabled = true;
+      status.textContent = 'Thinking...';
+      try {
+        const response = await invoke('send_prompt', { text: text });
+        addMsg('assistant', response || '(empty response)');
+      } catch(e) {
+        addMsg('assistant', 'Error: ' + e.toString());
+      }
+      sendBtn.disabled = false;
+      status.textContent = 'Ready';
+    }
+
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+    addMsg('assistant', 'Hello! I\'m your Finance Agent. Ask me about stock prices, financial ratios, company profiles, or SEC filings.');
+  </script>
+</body>
+</html>

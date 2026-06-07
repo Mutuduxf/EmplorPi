@@ -129,7 +129,7 @@ if (Test-Path "$TargetDir\Cargo.toml") {
 Write-Host "`n=== Step 3/3: Package portable bundle ===" -ForegroundColor Cyan
 
 $ExeName = "Finance Agent.exe"
-$SidecarName = "agent-sidecar.exe"
+$SidecarName = "agent-sidecar-x86_64-pc-windows-msvc.exe"
 
 # Create output directory
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
