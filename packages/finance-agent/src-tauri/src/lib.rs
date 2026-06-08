@@ -121,27 +121,50 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
     let input = format!("{}\n", serde_json::to_string(&command).map_err(|e| e.to_string())?);
     child.write(input.as_bytes()).map_err(|e| e.to_string())?;
 
-    // Drop child to close stdin — sidecar sees EOF, processes, and exits
-    drop(child);
-
-    // Read stdout events until the process exits (with 2-minute timeout)
+    // Read events with a 120-second timeout on each recv.
+    // Keep stdin open so the sidecar doesn't exit before the
+    // LLM call finishes.
     let mut response = String::new();
-    loop {
+    let mut assistant_received = false;
+    let mut saw_agent_end = false;
+
+    while !(assistant_received && saw_agent_end) {
         let event = tokio::time::timeout(
             std::time::Duration::from_secs(120),
             rx.recv(),
-        ).await.map_err(|_| "Agent timed out after 120 seconds.".to_string())?;
+        ).await;
 
         match event {
-            Some(CommandEvent::Stdout(data)) => {
+            Ok(Some(CommandEvent::Stdout(data))) => {
                 let line = String::from_utf8_lossy(&data);
                 response.push_str(&line);
+
+                // Parse JSON to detect assistant message_end and agent_end
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+                    match json.get("type").and_then(|t| t.as_str()) {
+                        Some("agent_end") => saw_agent_end = true,
+                        Some("message_end") => {
+                            if json.get("message").and_then(|m| m.get("role")).and_then(|r| r.as_str()) == Some("assistant") {
+                                assistant_received = true;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
             }
-            Some(CommandEvent::Terminated(_)) => break,
-            None => break,
-            _ => {}
+            Ok(Some(CommandEvent::Terminated(_))) => break,
+            Ok(None) => break,
+            Ok(_) => {}
+            Err(_) => {
+                // Timeout — append marker and exit loop
+                response.push_str("\n[Agent timed out after 120 seconds]\n");
+                break;
+            }
         }
     }
+
+    // Kill the sidecar since we're done reading
+    let _ = child.kill();
 
     // Extract assistant reply: last assistant message_end with text content
     let assistant_text = response
@@ -150,15 +173,12 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
             let json: serde_json::Value = serde_json::from_str(line).ok()?;
             if json.get("type")?.as_str()? != "message_end" { return None; }
             let msg = json.get("message")?;
-            // Skip user messages
             if msg.get("role")?.as_str()? != "assistant" { return None; }
-            // Check for error
             if let Some(err) = msg.get("errorMessage").and_then(|e| e.as_str()) {
                 if !err.is_empty() {
                     return Some(format!("Agent error: {}", err));
                 }
             }
-            // Extract text content
             let content = msg.get("content")?.as_array()?;
             let texts: Vec<&str> = content
                 .iter()
@@ -173,9 +193,7 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
             if response.is_empty() {
                 "No response from agent. The sidecar may have crashed.".to_string()
             } else {
-                // Show ALL raw events for debugging
                 let lines: Vec<&str> = response.lines().collect();
-                // If there's an errorMessage anywhere, show it prominently
                 let errors: Vec<String> = lines.iter().filter_map(|l| {
                     let json: serde_json::Value = serde_json::from_str(l).ok()?;
                     Some(json.get("message")?.get("errorMessage")?.as_str()?.to_string())
