@@ -33,7 +33,10 @@ syntax.jsonl
 out.jsonl
 pi-*.html
 out.html
-packages/coding-agent/binaries/
+# Build output
+packages/*/binaries/
+packages/*/target/
+packages/*/src-tauri/target/
 todo.md
 plans/
 .pi/hf-sessions/
