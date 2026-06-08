@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { marked } from "marked";
 
 // ── Types ──
@@ -385,38 +386,53 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
 
     const userText = input;
     setInput("");
-    const newMsg: Message = { role: "user", text: userText };
-    setMessages((m) => [...m, newMsg]);
+    setMessages((m) => [...m, { role: "user", text: userText }]);
     setLoading(true);
 
-    // Placeholder
-    setMessages((m) => [...m, { role: "assistant", text: "Thinking…" }]);
+    // Placeholder that will be updated by streaming events
+    setMessages((m) => [...m, { role: "assistant", text: "", thinking: "" }]);
+
+    const unlisteners: Array<() => void> = [];
+    let textAcc = "";
+    let thinkingAcc = "";
+
+    const updateMsg = () => {
+      setMessages((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = {
+          role: "assistant",
+          text: textAcc || "Thinking…",
+          thinking: thinkingAcc || undefined,
+        };
+        return copy;
+      });
+    };
 
     try {
-      const raw = await invoke<string>("send_prompt", { text: userText });
-      let text = raw;
-      let thinking: string | undefined;
-      try {
-        const parsed = JSON.parse(raw);
-        if (typeof parsed === "object" && parsed.text !== undefined) {
-          text = parsed.text;
-          thinking = parsed.thinking;
-        }
-      } catch { /* not JSON, use raw string */ }
+      const unlistenText = await listen<string>("stream:text", (e) => {
+        textAcc += e.payload;
+        updateMsg();
+      });
+      unlisteners.push(unlistenText);
 
-      setMessages((prev) => {
-        const copy = [...prev];
-        copy[copy.length - 1] = { role: "assistant", text: text || "(empty)", thinking };
-        return copy;
+      const unlistenThinking = await listen<string>("stream:thinking", (e) => {
+        thinkingAcc += e.payload;
+        updateMsg();
       });
+      unlisteners.push(unlistenThinking);
+
+      const unlistenError = await listen<string>("stream:error", (e) => {
+        textAcc = `Error: ${e.payload}`;
+        updateMsg();
+      });
+      unlisteners.push(unlistenError);
+
+      await invoke("send_prompt", { text: userText });
     } catch (e) {
-      const errMsg = `Error: ${e}`;
-      setMessages((prev) => {
-        const copy = [...prev];
-        copy[copy.length - 1] = { role: "assistant", text: errMsg };
-        return copy;
-      });
+      textAcc = `Error: ${e}`;
+      updateMsg();
     } finally {
+      unlisteners.forEach((u) => u());
       setLoading(false);
     }
   }, [input, loading]);

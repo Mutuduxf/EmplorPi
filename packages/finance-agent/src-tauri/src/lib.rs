@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::process::CommandEvent;
 
 // ── Auth storage (matches agent-base's auth.json format) ──
 
@@ -98,12 +99,10 @@ fn open_data_dir(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-// ── Existing prompt command (temporary simplified stub) ──
-
-use tauri_plugin_shell::process::CommandEvent;
+// ── Streaming prompt command ──
 
 #[tauri::command]
-async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, String> {
+async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<(), String> {
     let (mut rx, mut child) = app
         .shell()
         .sidecar("agent-sidecar")
@@ -112,7 +111,7 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
         .spawn()
         .map_err(|e| e.to_string())?;
 
-    // Write the prompt as a JSON-RPC command to stdin
+    // Write prompt as JSON-RPC command
     let command = serde_json::json!({
         "type": "prompt",
         "message": text,
@@ -121,18 +120,15 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
     let input = format!("{}\n", serde_json::to_string(&command).map_err(|e| e.to_string())?);
     child.write(input.as_bytes()).map_err(|e| e.to_string())?;
 
-    // Use a 5-minute deadline for the LLM to respond (reasoning models
-    // like deepseek-v4-pro can take several minutes to finish thinking
-    // before producing the actual text response).
-    let mut response = String::new();
-    let mut assistant_received = false;
-    let mut saw_agent_end = false;
+    let _ = app.emit("stream:status", "Connected to agent…");
+
+    // Read events, streaming content to the frontend in real time
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(300);
 
-    while !(assistant_received && saw_agent_end) {
+    loop {
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
         if remaining.is_zero() {
-            response.push_str("\n[Request timed out after 5 minutes]\n");
+            let _ = app.emit("stream:error", "Request timed out after 5 minutes");
             break;
         }
 
@@ -141,130 +137,75 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
         match event {
             Ok(Some(CommandEvent::Stdout(data))) => {
                 let line = String::from_utf8_lossy(&data);
-                response.push_str(&line);
-
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
-                    match json.get("type").and_then(|t| t.as_str()) {
-                        Some("agent_end") => saw_agent_end = true,
-                        Some("message_end") => {
-                            if json.get("message").and_then(|m| m.get("role")).and_then(|r| r.as_str()) == Some("assistant") {
-                                assistant_received = true;
-                            }
-                        }
-                        _ => {}
-                    }
+                    stream_sidecar_event(&app, &json);
                 }
             }
             Ok(Some(CommandEvent::Terminated(_))) => break,
             Ok(None) => break,
             Ok(_) => {}
             Err(_) => {
-                response.push_str("\n[Request timed out after 5 minutes]\n");
+                let _ = app.emit("stream:error", "Request timed out after 5 minutes");
                 break;
             }
         }
     }
 
-    // Kill the sidecar since we're done reading
     let _ = child.kill();
-
-    // Collect assistant message content from message_end OR message_update events.
-    // message_end is the final complete state; message_update has partial content
-    // when the stream is killed before completion.
-    let final_msg = response
-        .lines()
-        .filter_map(|line| -> Option<serde_json::Value> {
-            let json: serde_json::Value = serde_json::from_str(line).ok()?;
-            let t = json.get("type").and_then(|t| t.as_str())?;
-            if t != "message_end" && t != "message_update" {
-                return None;
-            }
-            let msg = json.get("message")?;
-            if msg.get("role")?.as_str()? != "assistant" { return None; }
-            Some(msg.clone())
-        })
-        .last();
-
-    // Prioritize message_end over message_update (they're the same shape)
-    let msg = final_msg;
-
-    let result = if let Some(ref msg) = msg {
-        if let Some(err) = msg.get("errorMessage").and_then(|e| e.as_str()) {
-            if !err.is_empty() {
-                serde_json::json!({"text": format!("Agent error: {}", err)})
-            } else {
-                extract_content_blocks(msg)
-            }
-        } else {
-            extract_content_blocks(msg)
-        }
-    } else {
-        // No assistant message — check for errors or show raw
-        if response.is_empty() {
-            serde_json::json!({"text": "No response from agent. The sidecar may have crashed."})
-        } else {
-            let errors: Vec<String> = response.lines().filter_map(|l| {
-                let json: serde_json::Value = serde_json::from_str(l).ok()?;
-                Some(json.get("message")?.get("errorMessage")?.as_str()?.to_string())
-            }).collect();
-            if !errors.is_empty() {
-                serde_json::json!({
-                    "text": format!("Agent errors:\n{}", errors.join("\n")),
-                    "_raw": response
-                })
-            } else {
-                serde_json::json!({
-                    "text": "No assistant response received.",
-                    "_raw": response
-                })
-            }
-        }
-    };
-
-    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+    let _ = app.emit("stream:done", "");
+    Ok(())
 }
 
-/// Extract text and thinking blocks from an assistant message.
-fn extract_content_blocks(msg: &serde_json::Value) -> serde_json::Value {
-    let mut text_parts: Vec<String> = Vec::new();
-    let mut thinking_parts: Vec<String> = Vec::new();
+/// Parse a single sidecar stdout JSON line and emit appropriate stream events.
+fn stream_sidecar_event(app: &tauri::AppHandle, json: &serde_json::Value) {
+    let event_type = match json.get("type").and_then(|t| t.as_str()) {
+        Some(t) => t,
+        None => return,
+    };
 
-    if let Some(content) = msg.get("content").and_then(|c| c.as_array()) {
-        for block in content {
-            match block.get("type").and_then(|t| t.as_str()) {
-                Some("text") => {
-                    if let Some(t) = block.get("text").and_then(|t| t.as_str()) {
-                        if !t.is_empty() {
-                            text_parts.push(t.to_string());
-                        }
-                    }
-                }
-                Some("thinking") => {
-                    if let Some(t) = block.get("thinking").and_then(|t| t.as_str()) {
-                        if !t.is_empty() {
-                            thinking_parts.push(t.to_string());
-                        }
-                    }
-                }
-                _ => {}
+    match event_type {
+        "thinking_delta" => {
+            if let Some(delta) = json.get("delta").and_then(|d| d.as_str()) {
+                let _ = app.emit("stream:thinking", delta);
             }
         }
+        "message_update" | "message_end" => {
+            if let Some(msg) = json.get("message") {
+                if msg.get("role").and_then(|r| r.as_str()) != Some("assistant") {
+                    return;
+                }
+                // Emit text deltas from content blocks
+                if let Some(content) = msg.get("content").and_then(|c| c.as_array()) {
+                    for block in content {
+                        match block.get("type").and_then(|t| t.as_str()) {
+                            Some("text") => {
+                                if let Some(t) = block.get("text").and_then(|t| t.as_str()) {
+                                    if !t.is_empty() {
+                                        let _ = app.emit("stream:text", t);
+                                    }
+                                }
+                            }
+                            Some("thinking") => {
+                                if let Some(t) = block.get("thinking").and_then(|t| t.as_str()) {
+                                    if !t.is_empty() {
+                                        let _ = app.emit("stream:thinking", t);
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                // Check for errors
+                if let Some(err) = msg.get("errorMessage").and_then(|e| e.as_str()) {
+                    if !err.is_empty() {
+                        let _ = app.emit("stream:error", err);
+                    }
+                }
+            }
+        }
+        _ => {}
     }
-
-    let mut obj = serde_json::Map::new();
-    let text = text_parts.join("\n");
-    let thinking = thinking_parts.join("\n");
-
-    // Always set text (may be empty if only thinking was received)
-    obj.insert("text".to_string(), serde_json::Value::String(if text.is_empty() && !thinking.is_empty() {
-        "(thinking only — response still generating)".to_string()
-    } else {
-        text
-    }));
-    if !thinking.is_empty() {
-        obj.insert("thinking".to_string(), serde_json::Value::String(thinking));
-    }
-    serde_json::Value::Object(obj)
 }
 
 // ── App entry ──
