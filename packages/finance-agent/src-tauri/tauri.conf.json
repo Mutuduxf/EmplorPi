@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.financeagent.app",
   "build": {
-    "frontendDist": "../dist",
+    "frontendDist": "../dist/web",
     "devUrl": "http://localhost:5173",
     "beforeBuildCommand": "npm run build:frontend",
     "beforeDevCommand": "npm run dev:frontend"
@@ -30,13 +30,7 @@
   },
   "plugins": {
     "shell": {
-      "sidecar": true,
-      "scope": [
-        {
-          "name": "binaries/agent-sidecar",
-          "sidecar": true
-        }
-      ]
+      "open": true
     }
   }
 }
