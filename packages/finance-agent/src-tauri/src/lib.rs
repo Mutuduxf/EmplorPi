@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::fs::OpenOptions;
+use std::io::Write;
 use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
@@ -64,6 +66,13 @@ fn open_data_dir(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn debug_log(app: &tauri::AppHandle, msg: &str) {
+    let log_path = data_dir(app).join("debug.log");
+    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_path) {
+        let _ = writeln!(f, "[{}] {}", std::process::id(), msg);
+    }
+}
+
 fn open_in_explorer(path: &str) -> Result<(), std::io::Error> {
     let cmd = if cfg!(target_os = "windows") { "explorer" }
     else if cfg!(target_os = "macos") { "open" }
@@ -76,40 +85,50 @@ fn open_in_explorer(path: &str) -> Result<(), std::io::Error> {
 
 #[tauri::command]
 async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, String> {
+    debug_log(&app, "send_prompt START");
+
     let (mut rx, mut child) = app
         .shell()
         .sidecar("agent-sidecar")
-        .map_err(|e| e.to_string())?
+        .map_err(|e| { debug_log(&app, &format!("ERR sidecar config: {}", e)); e.to_string() })?
         .args(["--mode", "rpc"])
         .spawn()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| { debug_log(&app, &format!("ERR spawn: {}", e)); e.to_string() })?;
+    debug_log(&app, "sidecar spawned OK");
 
-    // Write prompt
     let command = serde_json::json!({"type": "prompt", "message": text, "id": "1"});
     let input = format!("{}\n", serde_json::to_string(&command).map_err(|e| e.to_string())?);
     child.write(input.as_bytes()).map_err(|e| e.to_string())?;
+    debug_log(&app, "prompt written to stdin");
 
-    // Read all events with 600s deadline
     let mut all_output = String::new();
+    let mut event_count = 0u32;
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(120);
 
     loop {
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-        if remaining.is_zero() { break; }
+        if remaining.is_zero() { debug_log(&app, "loop END (deadline)"); break; }
 
         let event = tokio::time::timeout(remaining, rx.recv()).await;
         match event {
             Ok(Some(CommandEvent::Stdout(data))) => {
-                all_output.push_str(&String::from_utf8_lossy(&data));
+                let s = String::from_utf8_lossy(&data);
+                event_count += 1;
+                if event_count <= 5 {
+                    debug_log(&app, &format!("event {}: {}", event_count, s.trim().chars().take(120).collect::<String>()));
+                }
+                all_output.push_str(&s);
             }
-            Ok(Some(CommandEvent::Terminated(_))) => break,
-            Ok(None) => break,
+            Ok(Some(CommandEvent::Terminated(_))) => { debug_log(&app, "loop END (terminated)"); break; }
+            Ok(None) => { debug_log(&app, "loop END (None)"); break; }
             Ok(_) => {}
-            Err(_) => break,
+            Err(_) => { debug_log(&app, "loop END (timeout)"); break; }
         }
     }
 
+    debug_log(&app, &format!("loop done: {} events, {} bytes", event_count, all_output.len()));
     let _ = child.kill();
+    debug_log(&app, "sidecar killed");
 
     // Extract assistant message content
     let last_assistant_msg = all_output.lines()
@@ -145,7 +164,9 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
         }
     };
 
-    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+    let json = serde_json::to_string(&result).map_err(|e| e.to_string())?;
+    debug_log(&app, &format!("returning {} bytes: {:.120}", json.len(), json));
+    Ok(json)
 }
 
 /// Separate text and thinking blocks from an assistant message.
