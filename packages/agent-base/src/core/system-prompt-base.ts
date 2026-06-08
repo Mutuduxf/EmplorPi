@@ -51,9 +51,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	const tools = selectedTools ?? [];
 	const visibleTools = tools.filter((n) => !!toolSnippets?.[n]);
 	const toolsList =
-		visibleTools.length > 0
-			? visibleTools.map((n) => `- ${n}: ${toolSnippets![n]}`).join("\n")
-			: "(none)";
+		visibleTools.length > 0 ? visibleTools.map((n) => `- ${n}: ${toolSnippets![n]}`).join("\n") : "(none)";
 
 	const guidelines = (promptGuidelines ?? [])
 		.filter((g) => g.trim())
@@ -70,8 +68,7 @@ ${toolsList}
 		p += `\nGuidelines:\n${guidelines}\n`;
 	}
 
-	p +=
-		"\nIn addition to the tools above, you may have access to other custom tools depending on the project.";
+	p += "\nIn addition to the tools above, you may have access to other custom tools depending on the project.";
 
 	if (appendSection) p += appendSection;
 
