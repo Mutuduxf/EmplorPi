@@ -174,25 +174,19 @@ fn stream_sidecar_event(app: &tauri::AppHandle, json: &serde_json::Value) {
                 if msg.get("role").and_then(|r| r.as_str()) != Some("assistant") {
                     return;
                 }
-                // Emit text deltas from content blocks
+                // Emit text content from message blocks.
+                // Don't emit thinking here — it's handled by thinking_delta
+                // events which contain incremental deltas. message_update
+                // events contain the FULL accumulated thinking content,
+                // which would cause exponential duplication on the frontend.
                 if let Some(content) = msg.get("content").and_then(|c| c.as_array()) {
                     for block in content {
-                        match block.get("type").and_then(|t| t.as_str()) {
-                            Some("text") => {
-                                if let Some(t) = block.get("text").and_then(|t| t.as_str()) {
-                                    if !t.is_empty() {
-                                        let _ = app.emit("stream:text", t);
-                                    }
+                        if block.get("type").and_then(|t| t.as_str()) == Some("text") {
+                            if let Some(t) = block.get("text").and_then(|t| t.as_str()) {
+                                if !t.is_empty() {
+                                    let _ = app.emit("stream:text", t);
                                 }
                             }
-                            Some("thinking") => {
-                                if let Some(t) = block.get("thinking").and_then(|t| t.as_str()) {
-                                    if !t.is_empty() {
-                                        let _ = app.emit("stream:thinking", t);
-                                    }
-                                }
-                            }
-                            _ => {}
                         }
                     }
                 }
