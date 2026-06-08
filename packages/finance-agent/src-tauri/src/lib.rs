@@ -169,8 +169,8 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<(), String> 
         }
     }
 
-    // If we never got text, show thinking as fallback
-    let _ = app.emit("stream:show_thinking_as_text", "");
+    // Final summary: tell the frontend what happened
+    let _ = app.emit("stream:done", "");
 
     let _ = child.kill();
     let _ = app.emit("stream:done", "");

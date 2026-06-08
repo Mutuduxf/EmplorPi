@@ -410,9 +410,10 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     };
 
     const unlisteners: Array<() => void> = [];
-    const rawEvents: string[] = [];
+    let textEvtCount = 0;
+    let thinkEvtCount = 0;
 
-    const doThinkingFallback = () => {
+    const doFallback = () => {
       if (!textRef.current && thinkingRef.current) {
         textRef.current = thinkingRef.current;
         thinkingRef.current = "";
@@ -421,26 +422,12 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     };
 
     try {
-      const u1 = await listen<string>("stream:text", (e) => { textRef.current += e.payload; update(); });
+      const u1 = await listen<string>("stream:text", (e) => { textRef.current = e.payload; update(); textEvtCount++; });
       unlisteners.push(u1);
-      const u2 = await listen<string>("stream:thinking", (e) => { thinkingRef.current = e.payload; update(); });
+      const u2 = await listen<string>("stream:thinking", (e) => { thinkingRef.current = e.payload; update(); thinkEvtCount++; });
       unlisteners.push(u2);
-      const u3 = await listen<string>("stream:error", (e) => {
-        textRef.current = `Error: ${e.payload}`;
-        update();
-      });
+      const u3 = await listen<string>("stream:error", (e) => { textRef.current = `Error: ${e.payload}`; update(); });
       unlisteners.push(u3);
-      const u4 = await listen("stream:show_thinking_as_text", doThinkingFallback);
-      unlisteners.push(u4);
-      // Debug: collect raw events (console only, don't overwrite text)
-      const u5 = await listen<string>("stream:raw", (e) => {
-        rawEvents.push(e.payload);
-      });
-      unlisteners.push(u5);
-      const u6 = await listen<string>("stream:debug", (e) => {
-        rawEvents.push(e.payload);
-      });
-      unlisteners.push(u6);
 
       await invoke("send_prompt", { text: userText });
     } catch (e) {
@@ -451,10 +438,10 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
       setLoading(false);
     }
 
-    // After invoke: show raw event summary
-    if (rawEvents.length > 0) {
-      console.log("Raw sidecar events:", rawEvents);
-    }
+    // After invoke: apply fallback and show summary
+    doFallback();
+    textRef.current += `\n\n---\n[events: ${thinkEvtCount} thinking, ${textEvtCount} text]`;
+    update();
   };
 
   const newSession = () => {
