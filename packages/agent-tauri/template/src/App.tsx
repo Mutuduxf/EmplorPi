@@ -1,22 +1,385 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+
+// ── Types ──
 
 interface Message {
   role: "user" | "assistant";
   text: string;
 }
 
-function App() {
+type Page = "loading" | "setup" | "chat";
+
+// ── Providers for config page ──
+
+const PROVIDERS = [
+  { id: "anthropic", label: "Anthropic (Claude)" },
+  { id: "openai", label: "OpenAI (GPT)" },
+  { id: "google", label: "Google (Gemini)" },
+  { id: "mistral", label: "Mistral" },
+  { id: "deepseek", label: "DeepSeek" },
+  { id: "groq", label: "Groq" },
+  { id: "openrouter", label: "OpenRouter" },
+] as const;
+
+// ── About modal ──
+
+function AboutDialog({ onClose }: { onClose: () => void }) {
+  const [version, setVersion] = useState("…");
+  const [dataDir, setDataDir] = useState("…");
+
+  useEffect(() => {
+    invoke<string>("get_app_version").then(setVersion).catch(() => {});
+    invoke<string>("get_data_dir_path").then(setDataDir).catch(() => {});
+  }, []);
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.35)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 100,
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#fff",
+          borderRadius: 12,
+          padding: "28px 32px",
+          maxWidth: 400,
+          width: "90%",
+          boxShadow: "0 4px 24px rgba(0,0,0,0.15)",
+          fontFamily: "system-ui, -apple-system, sans-serif",
+        }}
+      >
+        <h2 style={{ margin: "0 0 4px", fontSize: 20 }}>My Agent</h2>
+        <p style={{ margin: "0 0 16px", color: "#666", fontSize: 13 }}>Version {version}</p>
+
+        <p style={{ margin: "0 0 8px", fontSize: 13, color: "#555" }}>
+          Built with{" "}
+          <a
+            href="https://github.com/earendil-works/pi"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "#1976d2" }}
+          >
+            @earendil-works/agent-base
+          </a>
+        </p>
+
+        <p style={{ margin: "0 0 16px", fontSize: 12, color: "#999", wordBreak: "break-all" }}>
+          Data: {dataDir}
+        </p>
+
+        <button
+          onClick={onClose}
+          style={{
+            padding: "8px 24px",
+            borderRadius: 6,
+            border: "none",
+            background: "#1976d2",
+            color: "#fff",
+            fontSize: 13,
+            cursor: "pointer",
+          }}
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Setup page ──
+
+function SetupPage({ onDone }: { onDone: () => void }) {
+  const [provider, setProvider] = useState(PROVIDERS[0].id);
+  const [key, setKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSave = async () => {
+    const trimmed = key.trim();
+    if (!trimmed) {
+      setError("Please enter an API key.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await invoke("save_api_key", { provider, key: trimmed });
+      onDone();
+    } catch (e) {
+      setError(`Failed to save: ${e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "100vh",
+        padding: 32,
+        fontFamily: "system-ui, -apple-system, sans-serif",
+      }}
+    >
+      <div style={{ maxWidth: 480, width: "100%" }}>
+        <h1 style={{ marginBottom: 8, fontSize: 24 }}>Welcome</h1>
+        <p style={{ marginBottom: 24, color: "#666", fontSize: 14 }}>
+          Choose your LLM provider and enter an API key to get started.
+          Your key is stored locally alongside the app.
+        </p>
+
+        <label
+          style={{
+            display: "block",
+            marginBottom: 6,
+            fontWeight: 600,
+            fontSize: 13,
+          }}
+        >
+          Provider
+        </label>
+        <select
+          value={provider}
+          onChange={(e) => {
+            setProvider(e.target.value);
+            setError("");
+          }}
+          style={{
+            width: "100%",
+            padding: "10px 12px",
+            marginBottom: 16,
+            borderRadius: 6,
+            border: "1px solid #ccc",
+            fontSize: 14,
+            background: "#fff",
+          }}
+        >
+          {PROVIDERS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+
+        <label
+          style={{
+            display: "block",
+            marginBottom: 6,
+            fontWeight: 600,
+            fontSize: 13,
+          }}
+        >
+          API Key
+        </label>
+        <input
+          type="password"
+          value={key}
+          onChange={(e) => {
+            setKey(e.target.value);
+            setError("");
+          }}
+          placeholder={`${PROVIDERS.find((p) => p.id === provider)?.id.toUpperCase()}_API_KEY`}
+          style={{
+            width: "100%",
+            padding: "10px 12px",
+            marginBottom: 12,
+            borderRadius: 6,
+            border: "1px solid #ccc",
+            fontSize: 14,
+            boxSizing: "border-box",
+          }}
+        />
+
+        {error && (
+          <p style={{ color: "#d32f2f", fontSize: 13, marginBottom: 12 }}>{error}</p>
+        )}
+
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{
+            width: "100%",
+            padding: "10px 0",
+            borderRadius: 6,
+            border: "none",
+            background: saving ? "#90caf9" : "#1976d2",
+            color: "#fff",
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: saving ? "default" : "pointer",
+          }}
+        >
+          {saving ? "Saving…" : "Continue"}
+        </button>
+
+        <p
+          style={{
+            marginTop: 16,
+            fontSize: 12,
+            color: "#999",
+            textAlign: "center",
+          }}
+        >
+          Keys are stored in <code>data/auth.json</code> next to the app.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Menu bar ──
+
+type MenuItem =
+  | { type: "action"; label: string; action: () => void }
+  | { type: "separator" };
+
+type MenuDef = {
+  label: string;
+  items: MenuItem[];
+};
+
+function MenuBar({ menus }: { menus: MenuDef[] }) {
+  const [openMenu, setOpenMenu] = useState<number | null>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  // Close when clicking outside
+  useEffect(() => {
+    if (openMenu === null) return;
+    const handler = (e: MouseEvent) => {
+      if (!barRef.current?.contains(e.target as Node)) {
+        setOpenMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenu]);
+
+  return (
+    <div
+      ref={barRef}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        height: 32,
+        background: "#f5f5f5",
+        borderBottom: "1px solid #ddd",
+        userSelect: "none",
+        fontFamily: "system-ui, -apple-system, sans-serif",
+        fontSize: 13,
+        position: "relative",
+        flexShrink: 0,
+      }}
+    >
+      {menus.map((menu, mi) => (
+        <div key={mi} style={{ position: "relative" }}>
+          <div
+            onClick={() => setOpenMenu(openMenu === mi ? null : mi)}
+            onMouseEnter={() => {
+              if (openMenu !== null) setOpenMenu(mi);
+            }}
+            style={{
+              padding: "4px 10px",
+              cursor: "pointer",
+              borderRadius: 4,
+              background: openMenu === mi ? "#e0e0e0" : "transparent",
+              marginLeft: 2,
+            }}
+          >
+            {menu.label}
+          </div>
+
+          {openMenu === mi && (
+            <div
+              style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                minWidth: 180,
+                background: "#fff",
+                border: "1px solid #ccc",
+                borderRadius: 6,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                padding: "4px 0",
+                zIndex: 50,
+              }}
+            >
+              {menu.items.map((item, ii) => {
+                if (item.type === "separator") {
+                  return (
+                    <div
+                      key={ii}
+                      style={{
+                        height: 1,
+                        background: "#e0e0e0",
+                        margin: "4px 8px",
+                      }}
+                    />
+                  );
+                }
+                return (
+                  <div
+                    key={ii}
+                    onClick={() => {
+                      setOpenMenu(null);
+                      item.action();
+                    }}
+                    style={{
+                      padding: "6px 16px",
+                      cursor: "pointer",
+                      fontSize: 13,
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.target as HTMLElement).style.background = "#f0f0f0";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.target as HTMLElement).style.background = "transparent";
+                    }}
+                  >
+                    {item.label}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Chat page ──
+
+function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const send = async () => {
+  // Keep focus on input after loading finishes
+  useEffect(() => {
+    if (!loading) inputRef.current?.focus();
+  }, [loading]);
+
+  const send = useCallback(async () => {
     if (!input.trim() || loading) return;
 
     const userText = input;
@@ -32,48 +395,206 @@ function App() {
     } finally {
       setLoading(false);
     }
+  }, [input, loading]);
+
+  const newSession = () => {
+    setMessages([]);
+    inputRef.current?.focus();
   };
 
+  const menus: MenuDef[] = [
+    {
+      label: "File",
+      items: [
+        {
+          type: "action",
+          label: "New Session",
+          action: newSession,
+        },
+        { type: "separator" },
+        {
+          type: "action",
+          label: "Configure Keys…",
+          action: onConfigure,
+        },
+        { type: "separator" },
+        {
+          type: "action",
+          label: "Quit",
+          action: () => window.close(),
+        },
+      ],
+    },
+    {
+      label: "Help",
+      items: [
+        {
+          type: "action",
+          label: "Open Data Directory",
+          action: () => {
+            invoke("open_data_dir").catch(console.error);
+          },
+        },
+        { type: "separator" },
+        {
+          type: "action",
+          label: "About",
+          action: () => setShowAbout(true),
+        },
+      ],
+    },
+  ];
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", padding: "16px" }}>
-      <div style={{ flex: 1, overflowY: "auto", marginBottom: "12px" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        fontFamily: "system-ui, -apple-system, sans-serif",
+      }}
+    >
+      <MenuBar menus={menus} />
+
+      {/* Messages */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "16px 16px 8px",
+        }}
+      >
+        {messages.length === 0 && !loading && (
+          <p
+            style={{
+              color: "#bbb",
+              textAlign: "center",
+              marginTop: 80,
+              fontSize: 14,
+            }}
+          >
+            Start a conversation
+          </p>
+        )}
+
         {messages.map((m, i) => (
           <div
             key={i}
             style={{
-              marginBottom: "8px",
+              marginBottom: 10,
               padding: "8px 12px",
-              borderRadius: "8px",
+              borderRadius: 8,
               background: m.role === "user" ? "#e3f2fd" : "#f5f5f5",
               maxWidth: "80%",
-              alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+              marginLeft: m.role === "user" ? "auto" : 0,
+              marginRight: m.role === "assistant" ? "auto" : 0,
             }}
           >
-            <strong>{m.role === "user" ? "You" : "Agent"}:</strong>
-            <div style={{ whiteSpace: "pre-wrap" }}>{m.text}</div>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: m.role === "user" ? "#1565c0" : "#555",
+                marginBottom: 2,
+              }}
+            >
+              {m.role === "user" ? "You" : "Agent"}
+            </div>
+            <div style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.5 }}>
+              {m.text}
+            </div>
           </div>
         ))}
+
         <div ref={bottomRef} />
       </div>
-      <div style={{ display: "flex", gap: "8px" }}>
+
+      {/* Input bar */}
+      <div
+        style={{
+          padding: "8px 16px 16px",
+          borderTop: "1px solid #eee",
+          display: "flex",
+          gap: 8,
+        }}
+      >
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder="Type a message..."
+          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
+          placeholder="Type a message…"
           disabled={loading}
-          style={{ flex: 1, padding: "8px", borderRadius: "4px", border: "1px solid #ccc" }}
+          autoFocus
+          style={{
+            flex: 1,
+            padding: "10px 12px",
+            borderRadius: 8,
+            border: "1px solid #ccc",
+            fontSize: 14,
+            outline: "none",
+          }}
         />
         <button
           onClick={send}
           disabled={loading}
-          style={{ padding: "8px 16px", borderRadius: "4px", border: "none", background: "#1976d2", color: "#fff", cursor: "pointer" }}
+          style={{
+            padding: "10px 20px",
+            borderRadius: 8,
+            border: "none",
+            background: loading ? "#90caf9" : "#1976d2",
+            color: "#fff",
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: loading ? "default" : "pointer",
+          }}
         >
-          {loading ? "..." : "Send"}
+          {loading ? "…" : "Send"}
         </button>
       </div>
+
+      {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
     </div>
   );
+}
+
+// ── Root ──
+
+function App() {
+  const [page, setPage] = useState<Page>("loading");
+
+  useEffect(() => {
+    invoke<boolean>("check_auth_state")
+      .then((hasKeys) => setPage(hasKeys ? "chat" : "setup"))
+      .catch(() => setPage("setup"));
+  }, []);
+
+  const goToSetup = useCallback(() => {
+    setPage("setup");
+  }, []);
+
+  if (page === "loading") {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100vh",
+          color: "#999",
+          fontFamily: "system-ui, -apple-system, sans-serif",
+        }}
+      >
+        Loading…
+      </div>
+    );
+  }
+
+  if (page === "setup") {
+    return <SetupPage onDone={() => setPage("chat")} />;
+  }
+
+  return <ChatPage onConfigure={goToSetup} />;
 }
 
 export default App;

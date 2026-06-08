@@ -221,9 +221,6 @@ export {
 	SettingsManager,
 	type SettingsManagerCreateOptions,
 } from "./core/settings-manager.ts";
-// Generic system prompt (domain-agnostic; BuildSystemPromptOptions type exported from extensions)
-export { buildSystemPrompt } from "./core/system-prompt-base.ts";
-
 // Skills
 export {
 	formatSkillsForPrompt,
@@ -235,6 +232,8 @@ export {
 	type SkillFrontmatter,
 } from "./core/skills.ts";
 export { createSyntheticSourceInfo } from "./core/source-info.ts";
+// Generic system prompt (domain-agnostic; BuildSystemPromptOptions type exported from extensions)
+export { buildSystemPrompt } from "./core/system-prompt-base.ts";
 // Tools
 export {
 	type BashOperations,
@@ -286,6 +285,12 @@ export {
 	withFileMutationQueue,
 } from "./core/tools/index.ts";
 export { hasProjectTrustInputs, type ProjectTrustDecision, ProjectTrustStore } from "./core/trust-manager.ts";
+// Domain agent runtime (portable desktop agents)
+export {
+	createDomainAgent,
+	type DomainAgentOptions,
+	DomainAgentRuntime,
+} from "./domain-agent.ts";
 // Main entry point
 export { type MainOptions, main } from "./main.ts";
 // Run modes for programmatic SDK usage
@@ -353,6 +358,7 @@ export {
 	Theme,
 	type ThemeColor,
 } from "./modes/interactive/theme/theme.ts";
+
 // Clipboard utilities
 export { copyToClipboard } from "./utils/clipboard.ts";
 export { parseFrontmatter, stripFrontmatter } from "./utils/frontmatter.ts";
