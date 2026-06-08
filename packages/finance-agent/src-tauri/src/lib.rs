@@ -103,9 +103,11 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
 
     let mut all_output = String::new();
     let mut event_count = 0u32;
+    let mut got_assistant_msg = false;
+    let mut got_agent_end = false;
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(120);
 
-    loop {
+    while !(got_assistant_msg && got_agent_end) {
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
         if remaining.is_zero() { debug_log(&app, "loop END (deadline)"); break; }
 
@@ -118,6 +120,18 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
                     debug_log(&app, &format!("event {}: {}", event_count, s.trim().chars().take(120).collect::<String>()));
                 }
                 all_output.push_str(&s);
+                // Track completion
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&s) {
+                    match json.get("type").and_then(|t| t.as_str()) {
+                        Some("agent_end") => { got_agent_end = true; }
+                        Some("message_end") => {
+                            if json.get("message").and_then(|m| m.get("role")).and_then(|r| r.as_str()) == Some("assistant") {
+                                got_assistant_msg = true;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
             }
             Ok(Some(CommandEvent::Terminated(_))) => { debug_log(&app, "loop END (terminated)"); break; }
             Ok(None) => { debug_log(&app, "loop END (None)"); break; }
@@ -125,6 +139,7 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
             Err(_) => { debug_log(&app, "loop END (timeout)"); break; }
         }
     }
+    debug_log(&app, &format!("loop done: got_assistant_msg={}, got_agent_end={}, {} events, {} bytes", got_assistant_msg, got_agent_end, event_count, all_output.len()));
 
     debug_log(&app, &format!("loop done: {} events, {} bytes", event_count, all_output.len()));
     let _ = child.kill();
