@@ -4,19 +4,29 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "tsx src-agent/index.ts",
-		"dev:rpc": "tsx src-agent/index.ts --mode rpc",
-		"build:sidecar": "bun build ./src-agent/index.ts --compile --outfile ./dist/finance-sidecar",
-		"build:tauri": "bun run build:sidecar && cd src-tauri && cargo build --release"
+		"dev": "bun run dev:sidecar & tauri dev",
+		"dev:sidecar": "bun build ./src-agent/index.ts --outfile ./src-tauri/binaries/agent-sidecar --watch",
+		"build": "bun run build:sidecar && tauri build",
+		"build:sidecar": "bun build ./src-agent/index.ts --compile --outfile ./src-tauri/binaries/agent-sidecar",
+		"build:frontend": "vite build"
 	},
 	"dependencies": {
 		"@earendil-works/agent-base": "^0.78.0",
 		"@earendil-works/pi-ai": "^0.78.0",
-		"@earendil-works/pi-agent-core": "^0.78.0"
+		"@earendil-works/pi-agent-core": "^0.78.0",
+		"@tauri-apps/api": "^2",
+		"@tauri-apps/plugin-shell": "^2"
 	},
 	"devDependencies": {
-		"tsx": "^4.0.0",
+		"@tauri-apps/cli": "^2",
 		"typescript": "5.9.3",
-		"@types/node": "^22"
+		"vite": "^6",
+		"@vitejs/plugin-react": "^4",
+		"react": "^19",
+		"react-dom": "^19",
+		"@types/react": "^19",
+		"@types/react-dom": "^19",
+		"@types/node": "^22",
+		"tsx": "^4.0.0"
 	}
 }

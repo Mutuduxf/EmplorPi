@@ -1,18 +1,19 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-config/packages/schema/schema.json",
-  "productName": "My Agent",
+  "productName": "Finance Agent",
   "version": "0.1.0",
-  "identifier": "com.myagent.app",
+  "identifier": "com.financeagent.app",
   "build": {
-    "frontendDist": "../src-agent",
+    "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "",
-    "beforeDevCommand": ""
+    "beforeBuildCommand": "npm run build:frontend",
+    "beforeDevCommand": "npm run dev:frontend"
   },
   "app": {
+    "title": "Finance Agent",
     "windows": [
       {
-        "title": "My Agent",
+        "title": "Finance Agent",
         "width": 900,
         "height": 700
       }
@@ -28,5 +29,15 @@
     "externalBin": ["binaries/agent-sidecar"],
     "resources": ["../skills/"]
   },
-  "plugins": {}
+  "plugins": {
+    "shell": {
+      "sidecar": true,
+      "scope": [
+        {
+          "name": "binaries/agent-sidecar",
+          "sidecar": true
+        }
+      ]
+    }
+  }
 }

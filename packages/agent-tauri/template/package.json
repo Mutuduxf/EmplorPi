@@ -7,7 +7,8 @@
     "dev:sidecar": "bun build ./src-agent/index.ts --outfile ./src-tauri/binaries/agent-sidecar --watch",
     "build": "bun run build:sidecar && tauri build",
     "build:sidecar": "bun build ./src-agent/index.ts --compile --outfile ./src-tauri/binaries/agent-sidecar",
-    "build:tauri": "tauri build"
+    "build:frontend": "vite build",
+    "dev:frontend": "vite"
   },
   "dependencies": {
     "@earendil-works/agent-base": "^0.78.0",

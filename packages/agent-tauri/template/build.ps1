@@ -34,8 +34,16 @@ if ($Mode -eq "release") {
 if ($LASTEXITCODE -ne 0) { Write-Host "FAILED" -ForegroundColor Red; exit 1 }
 Write-Host "[OK]" -ForegroundColor Green
 
-# Step 2: Build Tauri shell
-Write-Host "[2/3] Building Tauri desktop shell..." -ForegroundColor Cyan
+# Step 2: Build frontend + Tauri shell
+Write-Host "[2/3] Building frontend..." -ForegroundColor Cyan
+Push-Location $ScriptRoot
+try {
+  npm run build:frontend
+  if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
+  Write-Host "[OK] Frontend built" -ForegroundColor Green
+} finally { Pop-Location }
+
+Write-Host "      Building Tauri shell..." -ForegroundColor Cyan
 Push-Location "$ScriptRoot\src-tauri"
 try {
   if ($Mode -eq "release") { cargo build --release } else { cargo build }
