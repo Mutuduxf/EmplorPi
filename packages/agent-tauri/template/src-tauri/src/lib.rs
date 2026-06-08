@@ -55,7 +55,7 @@ fn save_api_key(app: tauri::AppHandle, provider: String, key: String) -> Result<
     auth.insert(
         provider,
         ApiKeyCredential {
-            cred_type: "apiKey".to_string(),
+            cred_type: "api_key".to_string(),
             key,
         },
     );

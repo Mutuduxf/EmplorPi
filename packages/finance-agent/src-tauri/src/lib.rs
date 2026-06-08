@@ -55,7 +55,7 @@ fn save_api_key(app: tauri::AppHandle, provider: String, key: String) -> Result<
     auth.insert(
         provider,
         ApiKeyCredential {
-            cred_type: "apiKey".to_string(),
+            cred_type: "api_key".to_string(),
             key,
         },
     );
@@ -120,54 +120,58 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
     });
     let input = format!("{}\n", serde_json::to_string(&command).map_err(|e| e.to_string())?);
     child.write(input.as_bytes()).map_err(|e| e.to_string())?;
-    // Close stdin so the sidecar knows to process and exit after the response
-    child.write(b"").map_err(|e| e.to_string())?;
 
-    // Read stdout events until the process exits
+    // Drop child to close stdin — sidecar sees EOF, processes, and exits
+    drop(child);
+
+    // Read stdout events until the process exits (with 2-minute timeout)
     let mut response = String::new();
-    while let Some(event) = rx.recv().await {
+    loop {
+        let event = tokio::time::timeout(
+            std::time::Duration::from_secs(120),
+            rx.recv(),
+        ).await.map_err(|_| "Agent timed out after 120 seconds.".to_string())?;
+
         match event {
-            CommandEvent::Stdout(data) => {
+            Some(CommandEvent::Stdout(data)) => {
                 let line = String::from_utf8_lossy(&data);
-                // Try to parse as JSON and extract the assistant's text response
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
-                    if json.get("type").and_then(|t| t.as_str()) == Some("response")
-                        && json.get("success").and_then(|s| s.as_bool()) == Some(true)
-                    {
-                        // Extract assistant message text from the final response
-                        // The actual text is streamed via message_end events
-                    }
-                }
                 response.push_str(&line);
-                response.push('\n');
             }
-            CommandEvent::Terminated(_) => break,
+            Some(CommandEvent::Terminated(_)) => break,
+            None => break,
             _ => {}
         }
     }
 
     // Extract the assistant's final text from the RPC event stream
-    // Look for the last message_end event which contains the full reply
     let assistant_text = response
         .lines()
         .filter_map(|line| {
             let json: serde_json::Value = serde_json::from_str(line).ok()?;
             if json.get("type")?.as_str()? == "message_end" {
                 let content = json.get("message")?.get("content")?.as_array()?;
-                let text = content
+                let texts: Vec<&str> = content
                     .iter()
                     .filter_map(|c| c.get("text")?.as_str())
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                if !text.is_empty() {
-                    return Some(text);
+                    .filter(|t| !t.is_empty())
+                    .collect();
+                if !texts.is_empty() {
+                    return Some(texts.join("\n"));
                 }
             }
             None
         })
         .last()
+        .or_else(|| {
+            // Check for error message in the events
+            response.lines().filter_map(|line| {
+                let json: serde_json::Value = serde_json::from_str(line).ok()?;
+                let msg = json.get("message")?;
+                let err = msg.get("errorMessage")?.as_str()?;
+                Some(format!("Error: {}", err))
+            }).last()
+        })
         .unwrap_or_else(|| {
-            // Fallback: show raw events if parsing fails
             if response.is_empty() {
                 "No response from agent.".to_string()
             } else {
