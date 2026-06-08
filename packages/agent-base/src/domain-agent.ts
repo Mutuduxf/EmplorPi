@@ -23,7 +23,7 @@
  */
 
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 import { isBunBinary } from "./config.ts";
@@ -87,6 +87,13 @@ export interface DomainAgentOptions {
 
 	/** API key override. Sets a runtime key for the selected model's provider. */
 	apiKey?: string;
+
+	/**
+	 * Path to an existing session JSONL file to resume.
+	 * When provided, the agent continues the conversation from this session.
+	 * When omitted, a new session is created.
+	 */
+	sessionFile?: string;
 }
 
 // ============================================================================
@@ -330,8 +337,11 @@ export async function createDomainAgent(options: DomainAgentOptions = {}): Promi
 		};
 	};
 
-	// 6. Create initial session manager
-	const sessionManager = SessionManager.create(cwd, join(dataDir, "sessions"));
+	// 6. Create or resume session manager
+	const sessionDir = join(dataDir, "sessions");
+	const sessionManager = options.sessionFile
+		? SessionManager.open(options.sessionFile, sessionDir)
+		: SessionManager.create(cwd, sessionDir);
 
 	// 7. Create the runtime
 	const runtime = await createAgentSessionRuntime(factory, {

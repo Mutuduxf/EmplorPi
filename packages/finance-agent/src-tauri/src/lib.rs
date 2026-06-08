@@ -3,9 +3,13 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::sync::Mutex;
 use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
+
+// Persist the session file path across send_prompt calls
+static SESSION_FILE: Mutex<Option<String>> = Mutex::new(None);
 
 // ── Auth storage (matches agent-base's auth.json format) ──
 
@@ -87,12 +91,17 @@ fn open_in_explorer(path: &str) -> Result<(), std::io::Error> {
 async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, String> {
     debug_log(&app, "send_prompt START");
 
-    let (mut rx, mut child) = app
-        .shell()
-        .sidecar("agent-sidecar")
+    // Use persistent session file across calls
+    let mut cmd = app.shell().sidecar("agent-sidecar")
         .map_err(|e| { debug_log(&app, &format!("ERR sidecar config: {}", e)); e.to_string() })?
-        .args(["--mode", "rpc"])
-        .spawn()
+        .args(["--mode", "rpc"]);
+
+    if let Some(sf) = SESSION_FILE.lock().unwrap().as_ref() {
+        cmd = cmd.args(["--session", sf]);
+        debug_log(&app, &format!("resuming session: {}", sf));
+    }
+
+    let (mut rx, mut child) = cmd.spawn()
         .map_err(|e| { debug_log(&app, &format!("ERR spawn: {}", e)); e.to_string() })?;
     debug_log(&app, "sidecar spawned OK");
 
@@ -140,10 +149,24 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
         }
     }
     debug_log(&app, &format!("loop done: got_assistant_msg={}, got_agent_end={}, {} events, {} bytes", got_assistant_msg, got_agent_end, event_count, all_output.len()));
-
-    debug_log(&app, &format!("loop done: {} events, {} bytes", event_count, all_output.len()));
     let _ = child.kill();
     debug_log(&app, "sidecar killed");
+
+    // Save session file path for conversation continuity
+    if SESSION_FILE.lock().unwrap().is_none() {
+        let sessions_dir = data_dir(&app).join("sessions");
+        if let Ok(entries) = std::fs::read_dir(&sessions_dir) {
+            let newest = entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().extension().map(|x| x == "jsonl").unwrap_or(false))
+                .max_by_key(|e| std::fs::metadata(e.path()).and_then(|m| m.modified()).ok());
+            if let Some(entry) = newest {
+                let path = entry.path().to_string_lossy().to_string();
+                *SESSION_FILE.lock().unwrap() = Some(path);
+                debug_log(&app, &format!("saved session file"));
+            }
+        }
+    }
 
     // Extract assistant message content
     let last_assistant_msg = all_output.lines()
