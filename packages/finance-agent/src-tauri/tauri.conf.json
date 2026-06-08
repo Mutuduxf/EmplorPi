@@ -10,7 +10,6 @@
     "beforeDevCommand": "npm run dev:frontend"
   },
   "app": {
-    "title": "Finance Agent",
     "windows": [
       {
         "title": "Finance Agent",

@@ -60,8 +60,8 @@ New-Item -ItemType Directory -Force -Path "$OutDir\data\sessions" | Out-Null
 New-Item -ItemType Directory -Force -Path "$OutDir\resources\skills" | Out-Null
 
 $ExeName = "Finance Agent.exe"
-$tauriExe = Join-Path $ReleaseDir $ExeName
-if (Test-Path $tauriExe) { Copy-Item $tauriExe "$OutDir\" -Force }
+$tauriExe = Join-Path $ReleaseDir "my-agent.exe"
+if (Test-Path $tauriExe) { Copy-Item $tauriExe "$OutDir\$ExeName" -Force }
 
 $sidecarExe = "$BinariesDir\agent-sidecar.exe"
 if (Test-Path $sidecarExe) { Copy-Item $sidecarExe "$OutDir\" -Force }
