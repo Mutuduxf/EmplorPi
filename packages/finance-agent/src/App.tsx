@@ -432,17 +432,13 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
       unlisteners.push(u3);
       const u4 = await listen("stream:show_thinking_as_text", doThinkingFallback);
       unlisteners.push(u4);
-      // Debug: collect raw events
+      // Debug: collect raw events (console only, don't overwrite text)
       const u5 = await listen<string>("stream:raw", (e) => {
         rawEvents.push(e.payload);
-        textRef.current = `[debug event ${rawEvents.length}]`;
-        update();
       });
       unlisteners.push(u5);
       const u6 = await listen<string>("stream:debug", (e) => {
         rawEvents.push(e.payload);
-        textRef.current = `[debug] ${e.payload}`;
-        update();
       });
       unlisteners.push(u6);
 
