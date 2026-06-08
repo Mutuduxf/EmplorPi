@@ -170,12 +170,24 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
         })
         .last()
         .unwrap_or_else(|| {
-            let first = response.lines().next().unwrap_or("");
-            if first.is_empty() {
-                "No response from agent.".to_string()
+            if response.is_empty() {
+                "No response from agent. The sidecar may have crashed.".to_string()
             } else {
-                format!("No assistant response. Raw output:\n{}",
-                    response.lines().take(5).collect::<Vec<_>>().join("\n"))
+                // Show ALL raw events for debugging
+                let lines: Vec<&str> = response.lines().collect();
+                // If there's an errorMessage anywhere, show it prominently
+                let errors: Vec<String> = lines.iter().filter_map(|l| {
+                    let json: serde_json::Value = serde_json::from_str(l).ok()?;
+                    Some(json.get("message")?.get("errorMessage")?.as_str()?.to_string())
+                }).collect();
+                if !errors.is_empty() {
+                    format!("Agent errors:\n{}\n\n--- Full event log ---\n{}",
+                        errors.join("\n"),
+                        lines.join("\n"))
+                } else {
+                    format!("No assistant response received. Sidecar output:\n{}",
+                        lines.join("\n"))
+                }
             }
         });
 
