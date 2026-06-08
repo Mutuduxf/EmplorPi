@@ -425,6 +425,13 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
       unlisteners.forEach((u) => u());
       setLoading(false);
     }
+
+    // Fallback: if no text arrived but we have thinking, show thinking as text
+    if (!textRef.current && thinkingRef.current) {
+      textRef.current = thinkingRef.current;
+      thinkingRef.current = "";
+      update();
+    }
   };
 
   const newSession = () => {

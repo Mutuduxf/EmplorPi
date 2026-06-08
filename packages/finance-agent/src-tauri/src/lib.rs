@@ -123,12 +123,12 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<(), String> 
     let _ = app.emit("stream:status", "Connected to agent…");
 
     // Read events, streaming content to the frontend in real time
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(300);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(600);
 
     loop {
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
         if remaining.is_zero() {
-            let _ = app.emit("stream:error", "Request timed out after 5 minutes");
+            let _ = app.emit("stream:error", "Request timed out after 10 minutes");
             break;
         }
 
@@ -145,7 +145,7 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<(), String> 
             Ok(None) => break,
             Ok(_) => {}
             Err(_) => {
-                let _ = app.emit("stream:error", "Request timed out after 5 minutes");
+                let _ = app.emit("stream:error", "Request timed out after 10 minutes");
                 break;
             }
         }
