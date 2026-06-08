@@ -122,36 +122,55 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<(), String> 
 
     let _ = app.emit("stream:status", "Connected to agent…");
 
-    // Hard 60-second timeout for the ENTIRE prompt.
-    // DeepSeek reasoning models output thinking progressively but
-    // the actual text response may never arrive as a separate block.
-    // The frontend's fallback (thinking-as-text) kicks in after this
-    // timeout fires and the invoke returns.
-    let result = tokio::time::timeout(
-        std::time::Duration::from_secs(60),
-        async {
-            loop {
-                match rx.recv().await {
-                    Some(CommandEvent::Stdout(data)) => {
-                        let line = String::from_utf8_lossy(&data);
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
-                            stream_sidecar_event(&app, &json);
-                        }
+    // Read events until natural completion (agent_end) or long timeout.
+    // DeepSeek reasoning models produce thinking first, then text.
+    // Text can take minutes to start arriving after thinking begins.
+    let mut has_assistant_message = false;
+    let mut has_agent_end = false;
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(600);
+
+    while !(has_assistant_message && has_agent_end) {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            let _ = app.emit("stream:debug", "[timeout after 600s]");
+            break;
+        }
+
+        let event = tokio::time::timeout(remaining, rx.recv()).await;
+        match event {
+            Ok(Some(CommandEvent::Stdout(data))) => {
+                let line = String::from_utf8_lossy(&data);
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+                    // Debug: emit every event as raw text
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() {
+                        let _ = app.emit("stream:raw", trimmed);
                     }
-                    Some(CommandEvent::Terminated(_)) => break,
-                    None => break,
-                    _ => {}
+                    stream_sidecar_event(&app, &json);
+                    // Track completion flags
+                    match json.get("type").and_then(|t| t.as_str()) {
+                        Some("agent_end") => has_agent_end = true,
+                        Some("message_end") => {
+                            if json.get("message").and_then(|m| m.get("role")).and_then(|r| r.as_str()) == Some("assistant") {
+                                has_assistant_message = true;
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
-        },
-    ).await;
-
-    if result.is_err() {
-        // Timeout — emit the last accumulated thinking as text so the
-        // frontend shows it. DeepSeek reasoning models only produce
-        // thinking blocks; no separate text blocks ever arrive.
-        let _ = app.emit("stream:show_thinking_as_text", "");
+            Ok(Some(CommandEvent::Terminated(_))) => break,
+            Ok(None) => break,
+            Ok(_) => {}
+            Err(_) => {
+                let _ = app.emit("stream:debug", "[per-recv timeout]");
+                break;
+            }
+        }
     }
+
+    // If we never got text, show thinking as fallback
+    let _ = app.emit("stream:show_thinking_as_text", "");
 
     let _ = child.kill();
     let _ = app.emit("stream:done", "");

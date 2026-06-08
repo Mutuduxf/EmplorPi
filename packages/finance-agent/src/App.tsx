@@ -410,6 +410,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     };
 
     const unlisteners: Array<() => void> = [];
+    const rawEvents: string[] = [];
 
     const doThinkingFallback = () => {
       if (!textRef.current && thinkingRef.current) {
@@ -429,10 +430,21 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
         update();
       });
       unlisteners.push(u3);
-      // When the sidecar times out (no text produced by reasoning model),
-      // Rust emits this event to trigger the thinking-as-text fallback.
       const u4 = await listen("stream:show_thinking_as_text", doThinkingFallback);
       unlisteners.push(u4);
+      // Debug: collect raw events
+      const u5 = await listen<string>("stream:raw", (e) => {
+        rawEvents.push(e.payload);
+        textRef.current = `[debug event ${rawEvents.length}]`;
+        update();
+      });
+      unlisteners.push(u5);
+      const u6 = await listen<string>("stream:debug", (e) => {
+        rawEvents.push(e.payload);
+        textRef.current = `[debug] ${e.payload}`;
+        update();
+      });
+      unlisteners.push(u6);
 
       await invoke("send_prompt", { text: userText });
     } catch (e) {
@@ -441,6 +453,11 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     } finally {
       unlisteners.forEach((u) => u());
       setLoading(false);
+    }
+
+    // After invoke: show raw event summary
+    if (rawEvents.length > 0) {
+      console.log("Raw sidecar events:", rawEvents);
     }
   };
 
