@@ -379,6 +379,8 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     if (!loading) inputRef.current?.focus();
   }, [loading]);
 
+  const [error, setError] = useState<string | null>(null);
+
   const send = useCallback(async () => {
     if (!input.trim() || loading) return;
 
@@ -386,12 +388,28 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     setInput("");
     setMessages((m) => [...m, { role: "user", text: userText }]);
     setLoading(true);
+    setError(null);
+
+    // Show a status message while waiting
+    setMessages((m) => [...m, { role: "assistant", text: "Thinking…" }]);
 
     try {
       const response = await invoke<string>("send_prompt", { text: userText });
-      setMessages((m) => [...m, { role: "assistant", text: response }]);
+      // Replace the placeholder with the actual response
+      setMessages((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = { role: "assistant", text: response || "(empty response)" };
+        return copy;
+      });
     } catch (e) {
-      setMessages((m) => [...m, { role: "assistant", text: `Error: ${e}` }]);
+      // Replace the placeholder with the error
+      const errMsg = `Error: ${e}`;
+      setMessages((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = { role: "assistant", text: errMsg };
+        return copy;
+      });
+      setError(errMsg);
     } finally {
       setLoading(false);
     }

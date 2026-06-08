@@ -100,18 +100,82 @@ fn open_data_dir(app: tauri::AppHandle) -> Result<(), String> {
 
 // ── Existing prompt command (temporary simplified stub) ──
 
+use tauri_plugin_shell::process::CommandEvent;
+
 #[tauri::command]
-async fn send_prompt(app: tauri::AppHandle, _text: String) -> Result<String, String> {
-    let sidecar = app
+async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, String> {
+    let (mut rx, mut child) = app
         .shell()
         .sidecar("agent-sidecar")
         .map_err(|e| e.to_string())?
-        .args(["--mode", "rpc"]);
+        .args(["--mode", "rpc"])
+        .spawn()
+        .map_err(|e| e.to_string())?;
 
-    // TODO: proper stdin/stdout streaming with JSON lines protocol
-    let output = sidecar.output().await.map_err(|e| e.to_string())?;
-    let response = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(response)
+    // Write the prompt as a JSON-RPC command to stdin
+    let command = serde_json::json!({
+        "type": "prompt",
+        "message": text,
+        "id": "1"
+    });
+    let input = format!("{}\n", serde_json::to_string(&command).map_err(|e| e.to_string())?);
+    child.write(input.as_bytes()).map_err(|e| e.to_string())?;
+    // Close stdin so the sidecar knows to process and exit after the response
+    child.write(b"").map_err(|e| e.to_string())?;
+
+    // Read stdout events until the process exits
+    let mut response = String::new();
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(data) => {
+                let line = String::from_utf8_lossy(&data);
+                // Try to parse as JSON and extract the assistant's text response
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+                    if json.get("type").and_then(|t| t.as_str()) == Some("response")
+                        && json.get("success").and_then(|s| s.as_bool()) == Some(true)
+                    {
+                        // Extract assistant message text from the final response
+                        // The actual text is streamed via message_end events
+                    }
+                }
+                response.push_str(&line);
+                response.push('\n');
+            }
+            CommandEvent::Terminated(_) => break,
+            _ => {}
+        }
+    }
+
+    // Extract the assistant's final text from the RPC event stream
+    // Look for the last message_end event which contains the full reply
+    let assistant_text = response
+        .lines()
+        .filter_map(|line| {
+            let json: serde_json::Value = serde_json::from_str(line).ok()?;
+            if json.get("type")?.as_str()? == "message_end" {
+                let content = json.get("message")?.get("content")?.as_array()?;
+                let text = content
+                    .iter()
+                    .filter_map(|c| c.get("text")?.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if !text.is_empty() {
+                    return Some(text);
+                }
+            }
+            None
+        })
+        .last()
+        .unwrap_or_else(|| {
+            // Fallback: show raw events if parsing fails
+            if response.is_empty() {
+                "No response from agent.".to_string()
+            } else {
+                format!("(raw events)\n{}", response)
+            }
+        });
+
+    Ok(assistant_text)
 }
 
 // ── App entry ──
