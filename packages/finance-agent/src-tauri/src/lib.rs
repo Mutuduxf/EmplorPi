@@ -168,28 +168,35 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
     // Kill the sidecar since we're done reading
     let _ = child.kill();
 
-    // Extract assistant reply: last assistant message_end with structured content
-    let reply = response
+    // Collect assistant message content from message_end OR message_update events.
+    // message_end is the final complete state; message_update has partial content
+    // when the stream is killed before completion.
+    let final_msg = response
         .lines()
         .filter_map(|line| -> Option<serde_json::Value> {
             let json: serde_json::Value = serde_json::from_str(line).ok()?;
-            if json.get("type")?.as_str()? != "message_end" { return None; }
+            let t = json.get("type").and_then(|t| t.as_str())?;
+            if t != "message_end" && t != "message_update" {
+                return None;
+            }
             let msg = json.get("message")?;
             if msg.get("role")?.as_str()? != "assistant" { return None; }
             Some(msg.clone())
         })
         .last();
 
-    // Build structured response: separate text, thinking, and error
-    let result = if let Some(msg) = reply {
+    // Prioritize message_end over message_update (they're the same shape)
+    let msg = final_msg;
+
+    let result = if let Some(ref msg) = msg {
         if let Some(err) = msg.get("errorMessage").and_then(|e| e.as_str()) {
             if !err.is_empty() {
                 serde_json::json!({"text": format!("Agent error: {}", err)})
             } else {
-                extract_content_blocks(&msg)
+                extract_content_blocks(msg)
             }
         } else {
-            extract_content_blocks(&msg)
+            extract_content_blocks(msg)
         }
     } else {
         // No assistant message — check for errors or show raw
