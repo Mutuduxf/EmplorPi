@@ -166,50 +166,88 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
     // Kill the sidecar since we're done reading
     let _ = child.kill();
 
-    // Extract assistant reply: last assistant message_end with text content
-    let assistant_text = response
+    // Extract assistant reply: last assistant message_end with structured content
+    let reply = response
         .lines()
-        .filter_map(|line| -> Option<String> {
+        .filter_map(|line| -> Option<serde_json::Value> {
             let json: serde_json::Value = serde_json::from_str(line).ok()?;
             if json.get("type")?.as_str()? != "message_end" { return None; }
             let msg = json.get("message")?;
             if msg.get("role")?.as_str()? != "assistant" { return None; }
-            if let Some(err) = msg.get("errorMessage").and_then(|e| e.as_str()) {
-                if !err.is_empty() {
-                    return Some(format!("Agent error: {}", err));
-                }
-            }
-            let content = msg.get("content")?.as_array()?;
-            let texts: Vec<&str> = content
-                .iter()
-                .filter_map(|c| c.get("text")?.as_str())
-                .filter(|t| !t.is_empty())
-                .collect();
-            if texts.is_empty() { None }
-            else { Some(texts.join("\n")) }
+            Some(msg.clone())
         })
-        .last()
-        .unwrap_or_else(|| {
-            if response.is_empty() {
-                "No response from agent. The sidecar may have crashed.".to_string()
-            } else {
-                let lines: Vec<&str> = response.lines().collect();
-                let errors: Vec<String> = lines.iter().filter_map(|l| {
-                    let json: serde_json::Value = serde_json::from_str(l).ok()?;
-                    Some(json.get("message")?.get("errorMessage")?.as_str()?.to_string())
-                }).collect();
-                if !errors.is_empty() {
-                    format!("Agent errors:\n{}\n\n--- Full event log ---\n{}",
-                        errors.join("\n"),
-                        lines.join("\n"))
-                } else {
-                    format!("No assistant response received. Sidecar output:\n{}",
-                        lines.join("\n"))
-                }
-            }
-        });
+        .last();
 
-    Ok(assistant_text)
+    // Build structured response: separate text, thinking, and error
+    let result = if let Some(msg) = reply {
+        if let Some(err) = msg.get("errorMessage").and_then(|e| e.as_str()) {
+            if !err.is_empty() {
+                serde_json::json!({"text": format!("Agent error: {}", err)})
+            } else {
+                extract_content_blocks(&msg)
+            }
+        } else {
+            extract_content_blocks(&msg)
+        }
+    } else {
+        // No assistant message — check for errors or show raw
+        if response.is_empty() {
+            serde_json::json!({"text": "No response from agent. The sidecar may have crashed."})
+        } else {
+            let errors: Vec<String> = response.lines().filter_map(|l| {
+                let json: serde_json::Value = serde_json::from_str(l).ok()?;
+                Some(json.get("message")?.get("errorMessage")?.as_str()?.to_string())
+            }).collect();
+            if !errors.is_empty() {
+                serde_json::json!({
+                    "text": format!("Agent errors:\n{}", errors.join("\n")),
+                    "_raw": response
+                })
+            } else {
+                serde_json::json!({
+                    "text": "No assistant response received.",
+                    "_raw": response
+                })
+            }
+        }
+    };
+
+    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+}
+
+/// Extract text and thinking blocks from an assistant message.
+fn extract_content_blocks(msg: &serde_json::Value) -> serde_json::Value {
+    let mut text_parts: Vec<String> = Vec::new();
+    let mut thinking_parts: Vec<String> = Vec::new();
+
+    if let Some(content) = msg.get("content").and_then(|c| c.as_array()) {
+        for block in content {
+            match block.get("type").and_then(|t| t.as_str()) {
+                Some("text") => {
+                    if let Some(t) = block.get("text").and_then(|t| t.as_str()) {
+                        if !t.is_empty() {
+                            text_parts.push(t.to_string());
+                        }
+                    }
+                }
+                Some("thinking") => {
+                    if let Some(t) = block.get("thinking").and_then(|t| t.as_str()) {
+                        if !t.is_empty() {
+                            thinking_parts.push(t.to_string());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut obj = serde_json::Map::new();
+    obj.insert("text".to_string(), serde_json::Value::String(text_parts.join("\n")));
+    if !thinking_parts.is_empty() {
+        obj.insert("thinking".to_string(), serde_json::Value::String(thinking_parts.join("\n")));
+    }
+    serde_json::Value::Object(obj)
 }
 
 // ── App entry ──

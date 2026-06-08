@@ -15,7 +15,8 @@
 		"@earendil-works/pi-ai": "^0.78.0",
 		"@earendil-works/pi-agent-core": "^0.78.0",
 		"@tauri-apps/api": "^2",
-		"@tauri-apps/plugin-shell": "^2"
+		"@tauri-apps/plugin-shell": "^2",
+		"marked": "^15.0.0"
 	},
 	"devDependencies": {
 		"@tauri-apps/cli": "^2",
