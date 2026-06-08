@@ -121,18 +121,18 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
     let input = format!("{}\n", serde_json::to_string(&command).map_err(|e| e.to_string())?);
     child.write(input.as_bytes()).map_err(|e| e.to_string())?;
 
-    // Read events with an overall 60-second deadline.
-    // Keep stdin open so the sidecar doesn't exit before the
-    // LLM call finishes.
+    // Use a 5-minute deadline for the LLM to respond (reasoning models
+    // like deepseek-v4-pro can take several minutes to finish thinking
+    // before producing the actual text response).
     let mut response = String::new();
     let mut assistant_received = false;
     let mut saw_agent_end = false;
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(300);
 
     while !(assistant_received && saw_agent_end) {
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
         if remaining.is_zero() {
-            response.push_str("\n[Request timed out after 60 seconds]\n");
+            response.push_str("\n[Request timed out after 5 minutes]\n");
             break;
         }
 
@@ -159,7 +159,7 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
             Ok(None) => break,
             Ok(_) => {}
             Err(_) => {
-                response.push_str("\n[Request timed out after 60 seconds]\n");
+                response.push_str("\n[Request timed out after 5 minutes]\n");
                 break;
             }
         }
