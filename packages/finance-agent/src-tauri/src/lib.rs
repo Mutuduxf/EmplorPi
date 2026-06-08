@@ -164,29 +164,33 @@ fn stream_sidecar_event(app: &tauri::AppHandle, json: &serde_json::Value) {
     };
 
     match event_type {
-        "thinking_delta" => {
-            if let Some(delta) = json.get("delta").and_then(|d| d.as_str()) {
-                let _ = app.emit("stream:thinking", delta);
-            }
-        }
         "message_update" | "message_end" => {
             if let Some(msg) = json.get("message") {
                 if msg.get("role").and_then(|r| r.as_str()) != Some("assistant") {
                     return;
                 }
-                // Emit text content from message blocks.
-                // Don't emit thinking here — it's handled by thinking_delta
-                // events which contain incremental deltas. message_update
-                // events contain the FULL accumulated thinking content,
-                // which would cause exponential duplication on the frontend.
+                // Forward text and thinking content to the frontend.
+                // message_update events contain the FULL accumulated text
+                // and thinking, so the frontend replaces (not appends) on
+                // each event to avoid duplication.
                 if let Some(content) = msg.get("content").and_then(|c| c.as_array()) {
                     for block in content {
-                        if block.get("type").and_then(|t| t.as_str()) == Some("text") {
-                            if let Some(t) = block.get("text").and_then(|t| t.as_str()) {
-                                if !t.is_empty() {
-                                    let _ = app.emit("stream:text", t);
+                        match block.get("type").and_then(|t| t.as_str()) {
+                            Some("text") => {
+                                if let Some(t) = block.get("text").and_then(|t| t.as_str()) {
+                                    if !t.is_empty() {
+                                        let _ = app.emit("stream:text", t);
+                                    }
                                 }
                             }
+                            Some("thinking") => {
+                                if let Some(t) = block.get("thinking").and_then(|t| t.as_str()) {
+                                    if !t.is_empty() {
+                                        let _ = app.emit("stream:thinking", t);
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }

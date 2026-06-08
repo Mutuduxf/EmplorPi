@@ -412,7 +412,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     try {
       const u1 = await listen<string>("stream:text", (e) => { textRef.current += e.payload; update(); });
       unlisteners.push(u1);
-      const u2 = await listen<string>("stream:thinking", (e) => { thinkingRef.current += e.payload; update(); });
+      const u2 = await listen<string>("stream:thinking", (e) => { thinkingRef.current = e.payload; update(); });
       unlisteners.push(u2);
       const u3 = await listen<string>("stream:error", (e) => { textRef.current = `Error: ${e.payload}`; update(); });
       unlisteners.push(u3);
