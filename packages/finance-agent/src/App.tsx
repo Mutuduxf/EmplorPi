@@ -381,7 +381,10 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     if (!loading) inputRef.current?.focus();
   }, [loading]);
 
-  const send = useCallback(async () => {
+  const textRef = useRef("");
+  const thinkingRef = useRef("");
+
+  const send = async () => {
     if (!input.trim() || loading) return;
 
     const userText = input;
@@ -389,53 +392,40 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     setMessages((m) => [...m, { role: "user", text: userText }]);
     setLoading(true);
 
-    // Placeholder that will be updated by streaming events
-    setMessages((m) => [...m, { role: "assistant", text: "", thinking: "" }]);
+    textRef.current = "";
+    thinkingRef.current = "";
+    setMessages((m) => [...m, { role: "assistant", text: "Thinking…", thinking: undefined }]);
 
-    const unlisteners: Array<() => void> = [];
-    let textAcc = "";
-    let thinkingAcc = "";
-
-    const updateMsg = () => {
+    const update = () => {
       setMessages((prev) => {
         const copy = [...prev];
         copy[copy.length - 1] = {
           role: "assistant",
-          text: textAcc || "Thinking…",
-          thinking: thinkingAcc || undefined,
+          text: textRef.current || "Thinking…",
+          thinking: thinkingRef.current || undefined,
         };
         return copy;
       });
     };
 
+    const unlisteners: Array<() => void> = [];
     try {
-      const unlistenText = await listen<string>("stream:text", (e) => {
-        textAcc += e.payload;
-        updateMsg();
-      });
-      unlisteners.push(unlistenText);
-
-      const unlistenThinking = await listen<string>("stream:thinking", (e) => {
-        thinkingAcc += e.payload;
-        updateMsg();
-      });
-      unlisteners.push(unlistenThinking);
-
-      const unlistenError = await listen<string>("stream:error", (e) => {
-        textAcc = `Error: ${e.payload}`;
-        updateMsg();
-      });
-      unlisteners.push(unlistenError);
+      const u1 = await listen<string>("stream:text", (e) => { textRef.current += e.payload; update(); });
+      unlisteners.push(u1);
+      const u2 = await listen<string>("stream:thinking", (e) => { thinkingRef.current += e.payload; update(); });
+      unlisteners.push(u2);
+      const u3 = await listen<string>("stream:error", (e) => { textRef.current = `Error: ${e.payload}`; update(); });
+      unlisteners.push(u3);
 
       await invoke("send_prompt", { text: userText });
     } catch (e) {
-      textAcc = `Error: ${e}`;
-      updateMsg();
+      textRef.current = `Error: ${e}`;
+      update();
     } finally {
       unlisteners.forEach((u) => u());
       setLoading(false);
     }
-  }, [input, loading]);
+  };
 
   const newSession = () => {
     setMessages([]);
