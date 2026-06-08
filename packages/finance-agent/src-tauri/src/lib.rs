@@ -121,25 +121,28 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
     let input = format!("{}\n", serde_json::to_string(&command).map_err(|e| e.to_string())?);
     child.write(input.as_bytes()).map_err(|e| e.to_string())?;
 
-    // Read events with a 120-second timeout on each recv.
+    // Read events with an overall 60-second deadline.
     // Keep stdin open so the sidecar doesn't exit before the
     // LLM call finishes.
     let mut response = String::new();
     let mut assistant_received = false;
     let mut saw_agent_end = false;
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
 
     while !(assistant_received && saw_agent_end) {
-        let event = tokio::time::timeout(
-            std::time::Duration::from_secs(300),
-            rx.recv(),
-        ).await;
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            response.push_str("\n[Request timed out after 60 seconds]\n");
+            break;
+        }
+
+        let event = tokio::time::timeout(remaining, rx.recv()).await;
 
         match event {
             Ok(Some(CommandEvent::Stdout(data))) => {
                 let line = String::from_utf8_lossy(&data);
                 response.push_str(&line);
 
-                // Parse JSON to detect assistant message_end and agent_end
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
                     match json.get("type").and_then(|t| t.as_str()) {
                         Some("agent_end") => saw_agent_end = true,
@@ -156,8 +159,7 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
             Ok(None) => break,
             Ok(_) => {}
             Err(_) => {
-                // Timeout — append marker and exit loop
-                response.push_str("\n[Agent timed out after 120 seconds]\n");
+                response.push_str("\n[Request timed out after 60 seconds]\n");
                 break;
             }
         }
