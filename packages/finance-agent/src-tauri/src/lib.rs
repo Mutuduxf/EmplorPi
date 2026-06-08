@@ -130,7 +130,7 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
 
     while !(assistant_received && saw_agent_end) {
         let event = tokio::time::timeout(
-            std::time::Duration::from_secs(120),
+            std::time::Duration::from_secs(300),
             rx.recv(),
         ).await;
 

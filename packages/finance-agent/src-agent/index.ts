@@ -16,6 +16,7 @@ const agent = await createDomainAgent({
     "financial data analysis, report generation, and market insights.",
   skillDirs: ["./skills"],
   excludeDefaultTools: true,
+  thinkingLevel: "off",
 });
 
 await agent.runRpc();
