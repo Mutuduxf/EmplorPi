@@ -122,33 +122,32 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<(), String> 
 
     let _ = app.emit("stream:status", "Connected to agent…");
 
-    // Read events, streaming content to the frontend in real time
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(600);
-
-    loop {
-        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-        if remaining.is_zero() {
-            let _ = app.emit("stream:error", "Request timed out after 10 minutes");
-            break;
-        }
-
-        let event = tokio::time::timeout(remaining, rx.recv()).await;
-
-        match event {
-            Ok(Some(CommandEvent::Stdout(data))) => {
-                let line = String::from_utf8_lossy(&data);
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
-                    stream_sidecar_event(&app, &json);
+    // Hard 60-second timeout for the ENTIRE prompt.
+    // DeepSeek reasoning models output thinking progressively but
+    // the actual text response may never arrive as a separate block.
+    // The frontend's fallback (thinking-as-text) kicks in after this
+    // timeout fires and the invoke returns.
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        async {
+            loop {
+                match rx.recv().await {
+                    Some(CommandEvent::Stdout(data)) => {
+                        let line = String::from_utf8_lossy(&data);
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+                            stream_sidecar_event(&app, &json);
+                        }
+                    }
+                    Some(CommandEvent::Terminated(_)) => break,
+                    None => break,
+                    _ => {}
                 }
             }
-            Ok(Some(CommandEvent::Terminated(_))) => break,
-            Ok(None) => break,
-            Ok(_) => {}
-            Err(_) => {
-                let _ = app.emit("stream:error", "Request timed out after 10 minutes");
-                break;
-            }
-        }
+        },
+    ).await;
+
+    if result.is_err() {
+        let _ = app.emit("stream:error", "Response complete (thinking shown above)");
     }
 
     let _ = child.kill();
