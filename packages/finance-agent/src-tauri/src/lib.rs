@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 
@@ -32,9 +32,7 @@ fn auth_path(app: &tauri::AppHandle) -> PathBuf {
 #[tauri::command]
 fn check_auth_state(app: tauri::AppHandle) -> Result<bool, String> {
     let path = auth_path(&app);
-    if !path.exists() {
-        return Ok(false);
-    }
+    if !path.exists() { return Ok(false); }
     let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let auth: AuthData = serde_json::from_str(&content).map_err(|e| e.to_string())?;
     Ok(auth.values().any(|c| !c.key.is_empty()))
@@ -44,65 +42,40 @@ fn check_auth_state(app: tauri::AppHandle) -> Result<bool, String> {
 fn save_api_key(app: tauri::AppHandle, provider: String, key: String) -> Result<(), String> {
     let dir = data_dir(&app);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-
     let path = auth_path(&app);
     let mut auth: AuthData = if path.exists() {
         let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
         serde_json::from_str(&content).unwrap_or_default()
-    } else {
-        HashMap::new()
-    };
-
-    auth.insert(
-        provider,
-        ApiKeyCredential {
-            cred_type: "api_key".to_string(),
-            key,
-        },
-    );
-
+    } else { HashMap::new() };
+    auth.insert(provider, ApiKeyCredential { cred_type: "api_key".to_string(), key });
     let json = serde_json::to_string_pretty(&auth).map_err(|e| e.to_string())?;
     std::fs::write(&path, json).map_err(|e| e.to_string())?;
     Ok(())
 }
 
-// ── Menu commands ──
-
 #[tauri::command]
-fn get_app_version() -> String {
-    env!("CARGO_PKG_VERSION").to_string()
-}
+fn get_app_version() -> String { env!("CARGO_PKG_VERSION").to_string() }
 
 #[tauri::command]
 fn open_data_dir(app: tauri::AppHandle) -> Result<(), String> {
     let dir = data_dir(&app);
     let path_str = dir.to_string_lossy().to_string();
-
-    #[cfg(target_os = "windows")]
-    std::process::Command::new("explorer")
-        .arg(&path_str)
-        .spawn()
-        .map_err(|e| e.to_string())?;
-
-    #[cfg(target_os = "macos")]
-    std::process::Command::new("open")
-        .arg(&path_str)
-        .spawn()
-        .map_err(|e| e.to_string())?;
-
-    #[cfg(target_os = "linux")]
-    std::process::Command::new("xdg-open")
-        .arg(&path_str)
-        .spawn()
-        .map_err(|e| e.to_string())?;
-
+    open_in_explorer(&path_str).map_err(|e| e.to_string())?;
     Ok(())
 }
 
-// ── Streaming prompt command ──
+fn open_in_explorer(path: &str) -> Result<(), std::io::Error> {
+    let cmd = if cfg!(target_os = "windows") { "explorer" }
+    else if cfg!(target_os = "macos") { "open" }
+    else { "xdg-open" };
+    std::process::Command::new(cmd).arg(path).spawn()?;
+    Ok(())
+}
+
+// ── send_prompt: collect all events, return structured JSON ──
 
 #[tauri::command]
-async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<(), String> {
+async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, String> {
     let (mut rx, mut child) = app
         .shell()
         .sidecar("agent-sidecar")
@@ -111,120 +84,108 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<(), String> 
         .spawn()
         .map_err(|e| e.to_string())?;
 
-    // Write prompt as JSON-RPC command
-    let command = serde_json::json!({
-        "type": "prompt",
-        "message": text,
-        "id": "1"
-    });
+    // Write prompt
+    let command = serde_json::json!({"type": "prompt", "message": text, "id": "1"});
     let input = format!("{}\n", serde_json::to_string(&command).map_err(|e| e.to_string())?);
     child.write(input.as_bytes()).map_err(|e| e.to_string())?;
 
-    let _ = app.emit("stream:status", "Connected to agent…");
-
-    // Read events until natural completion (agent_end) or long timeout.
-    // DeepSeek reasoning models produce thinking first, then text.
-    // Text can take minutes to start arriving after thinking begins.
-    let mut has_assistant_message = false;
-    let mut has_agent_end = false;
+    // Read all events with 600s deadline
+    let mut all_output = String::new();
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(600);
 
-    while !(has_assistant_message && has_agent_end) {
+    loop {
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-        if remaining.is_zero() {
-            let _ = app.emit("stream:debug", "[timeout after 600s]");
-            break;
-        }
+        if remaining.is_zero() { break; }
 
         let event = tokio::time::timeout(remaining, rx.recv()).await;
         match event {
             Ok(Some(CommandEvent::Stdout(data))) => {
-                let line = String::from_utf8_lossy(&data);
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
-                    // Debug: emit every event as raw text
-                    let trimmed = line.trim();
-                    if !trimmed.is_empty() {
-                        let _ = app.emit("stream:raw", trimmed);
-                    }
-                    stream_sidecar_event(&app, &json);
-                    // Track completion flags
-                    match json.get("type").and_then(|t| t.as_str()) {
-                        Some("agent_end") => has_agent_end = true,
-                        Some("message_end") => {
-                            if json.get("message").and_then(|m| m.get("role")).and_then(|r| r.as_str()) == Some("assistant") {
-                                has_assistant_message = true;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
+                all_output.push_str(&String::from_utf8_lossy(&data));
             }
             Ok(Some(CommandEvent::Terminated(_))) => break,
             Ok(None) => break,
             Ok(_) => {}
-            Err(_) => {
-                let _ = app.emit("stream:debug", "[per-recv timeout]");
-                break;
-            }
+            Err(_) => break,
         }
     }
-
-    // Final summary: tell the frontend what happened
-    let _ = app.emit("stream:done", "");
 
     let _ = child.kill();
-    let _ = app.emit("stream:done", "");
-    Ok(())
-}
 
-/// Parse a single sidecar stdout JSON line and emit appropriate stream events.
-fn stream_sidecar_event(app: &tauri::AppHandle, json: &serde_json::Value) {
-    let event_type = match json.get("type").and_then(|t| t.as_str()) {
-        Some(t) => t,
-        None => return,
-    };
+    // Extract assistant message content
+    let last_assistant_msg = all_output.lines()
+        .filter_map(|line| -> Option<serde_json::Value> {
+            let json: serde_json::Value = serde_json::from_str(line).ok()?;
+            match json.get("type").and_then(|t| t.as_str()) {
+                Some("message_end") | Some("message_update") => {}
+                _ => { return None; }
+            }
+            let msg = json.get("message")?;
+            if msg.get("role").and_then(|r| r.as_str()) != Some("assistant") { return None; }
+            Some(msg.clone())
+        })
+        .last();
 
-    match event_type {
-        "message_update" | "message_end" => {
-            if let Some(msg) = json.get("message") {
-                if msg.get("role").and_then(|r| r.as_str()) != Some("assistant") {
-                    return;
-                }
-                // Forward text and thinking content to the frontend.
-                // message_update events contain the FULL accumulated text
-                // and thinking, so the frontend replaces (not appends) on
-                // each event to avoid duplication.
-                if let Some(content) = msg.get("content").and_then(|c| c.as_array()) {
-                    for block in content {
-                        match block.get("type").and_then(|t| t.as_str()) {
-                            Some("text") => {
-                                if let Some(t) = block.get("text").and_then(|t| t.as_str()) {
-                                    if !t.is_empty() {
-                                        let _ = app.emit("stream:text", t);
-                                    }
-                                }
-                            }
-                            Some("thinking") => {
-                                if let Some(t) = block.get("thinking").and_then(|t| t.as_str()) {
-                                    if !t.is_empty() {
-                                        let _ = app.emit("stream:thinking", t);
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                // Check for errors
-                if let Some(err) = msg.get("errorMessage").and_then(|e| e.as_str()) {
-                    if !err.is_empty() {
-                        let _ = app.emit("stream:error", err);
-                    }
-                }
+    let result = if let Some(ref msg) = last_assistant_msg {
+        extract_content(msg)
+    } else {
+        // No assistant message at all — show raw events as fallback
+        if all_output.is_empty() {
+            serde_json::json!({"text": "No response from agent."})
+        } else {
+            let lines: Vec<&str> = all_output.lines().collect();
+            let errors: Vec<String> = lines.iter().filter_map(|l| {
+                let json: serde_json::Value = serde_json::from_str(l).ok()?;
+                Some(json.get("message")?.get("errorMessage")?.as_str()?.to_string())
+            }).collect();
+            if !errors.is_empty() {
+                serde_json::json!({"text": format!("Agent error: {}", errors.join("\n"))})
+            } else {
+                serde_json::json!({"text": format!("No assistant response.\nRaw:\n{}", lines.join("\n"))})
             }
         }
-        _ => {}
+    };
+
+    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+}
+
+/// Separate text and thinking blocks from an assistant message.
+/// DeepSeek reasoning models put everything in thinking — use it as text fallback.
+fn extract_content(msg: &serde_json::Value) -> serde_json::Value {
+    let mut text: Vec<String> = Vec::new();
+    let mut thinking: Vec<String> = Vec::new();
+
+    if let Some(content) = msg.get("content").and_then(|c| c.as_array()) {
+        for block in content {
+            match block.get("type").and_then(|t| t.as_str()) {
+                Some("text") => {
+                    if let Some(t) = block.get("text").and_then(|t| t.as_str()) {
+                        if !t.is_empty() { text.push(t.to_string()); }
+                    }
+                }
+                Some("thinking") => {
+                    if let Some(t) = block.get("thinking").and_then(|t| t.as_str()) {
+                        if !t.is_empty() { thinking.push(t.to_string()); }
+                    }
+                }
+                _ => {}
+            }
+        }
     }
+
+    let text_str = text.join("\n");
+    let thinking_str = thinking.join("\n");
+
+    let mut obj = serde_json::Map::new();
+    if text_str.is_empty() && !thinking_str.is_empty() {
+        // DeepSeek reasoning: no text block, use thinking as the reply
+        obj.insert("text".to_string(), serde_json::Value::String(thinking_str));
+    } else {
+        obj.insert("text".to_string(), serde_json::Value::String(text_str));
+        if !thinking_str.is_empty() {
+            obj.insert("thinking".to_string(), serde_json::Value::String(thinking_str));
+        }
+    }
+    serde_json::Value::Object(obj)
 }
 
 // ── App entry ──
@@ -233,16 +194,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
-            check_auth_state,
-            save_api_key,
-            get_app_version,
-            open_data_dir,
-            send_prompt,
+            check_auth_state, save_api_key, get_app_version, open_data_dir, send_prompt,
         ])
         .setup(|app| {
             let dir = data_dir(&app.handle());
-            std::fs::create_dir_all(dir.join("sessions"))
-                .expect("failed to create data/sessions directory");
+            std::fs::create_dir_all(dir.join("sessions")).expect("failed to create data/sessions directory");
             Ok(())
         })
         .run(tauri::generate_context!())
