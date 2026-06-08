@@ -91,7 +91,7 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
 
     // Read all events with 600s deadline
     let mut all_output = String::new();
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(600);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(120);
 
     loop {
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
