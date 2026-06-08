@@ -25,7 +25,7 @@ Write-Host "[OK]" -ForegroundColor Green
 # Step 1: Build Bun sidecar
 Write-Host "`n[1/3] Building Bun sidecar..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path $BinariesDir | Out-Null
-bun build "$ScriptRoot\src-agent\index.ts" --compile --outfile "$BinariesDir\agent-sidecar"
+bun build "$ScriptRoot\src-agent\index.ts" --compile --outfile "$BinariesDir\agent-sidecar-x86_64-pc-windows-msvc"
 if ($LASTEXITCODE -ne 0) { throw "Sidecar build failed" }
 Write-Host "[OK]" -ForegroundColor Green
 
@@ -45,7 +45,7 @@ New-Item -ItemType Directory -Force -Path "$OutDir\data\sessions" | Out-Null
 New-Item -ItemType Directory -Force -Path "$OutDir\resources\skills" | Out-Null
 
 Copy-Item (Join-Path $ReleaseDir "my-agent.exe") "$OutDir\Finance Agent.exe" -Force
-Copy-Item "$BinariesDir\agent-sidecar.exe" "$OutDir\" -Force
+Copy-Item "$BinariesDir\agent-sidecar-x86_64-pc-windows-msvc.exe" "$OutDir\agent-sidecar.exe" -Force
 if (Test-Path "$ScriptRoot\skills") {
   Copy-Item "$ScriptRoot\skills\*" "$OutDir\resources\skills\" -Recurse -Force
 }
