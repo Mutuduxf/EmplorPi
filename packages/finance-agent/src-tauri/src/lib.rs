@@ -243,9 +243,17 @@ fn extract_content_blocks(msg: &serde_json::Value) -> serde_json::Value {
     }
 
     let mut obj = serde_json::Map::new();
-    obj.insert("text".to_string(), serde_json::Value::String(text_parts.join("\n")));
-    if !thinking_parts.is_empty() {
-        obj.insert("thinking".to_string(), serde_json::Value::String(thinking_parts.join("\n")));
+    let text = text_parts.join("\n");
+    let thinking = thinking_parts.join("\n");
+
+    // Always set text (may be empty if only thinking was received)
+    obj.insert("text".to_string(), serde_json::Value::String(if text.is_empty() && !thinking.is_empty() {
+        "(thinking only — response still generating)".to_string()
+    } else {
+        text
+    }));
+    if !thinking.is_empty() {
+        obj.insert("thinking".to_string(), serde_json::Value::String(thinking));
     }
     serde_json::Value::Object(obj)
 }

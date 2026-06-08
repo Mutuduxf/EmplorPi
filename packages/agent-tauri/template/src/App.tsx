@@ -253,7 +253,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
       let thinking: string | undefined;
       try {
         const parsed = JSON.parse(raw);
-        if (typeof parsed === "object" && parsed.text) {
+        if (typeof parsed === "object" && parsed.text !== undefined) {
           text = parsed.text;
           thinking = parsed.thinking;
         }
