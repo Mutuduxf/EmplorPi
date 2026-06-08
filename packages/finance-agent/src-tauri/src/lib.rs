@@ -143,39 +143,39 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
         }
     }
 
-    // Extract the assistant's final text from the RPC event stream
+    // Extract assistant reply: last assistant message_end with text content
     let assistant_text = response
         .lines()
-        .filter_map(|line| {
+        .filter_map(|line| -> Option<String> {
             let json: serde_json::Value = serde_json::from_str(line).ok()?;
-            if json.get("type")?.as_str()? == "message_end" {
-                let content = json.get("message")?.get("content")?.as_array()?;
-                let texts: Vec<&str> = content
-                    .iter()
-                    .filter_map(|c| c.get("text")?.as_str())
-                    .filter(|t| !t.is_empty())
-                    .collect();
-                if !texts.is_empty() {
-                    return Some(texts.join("\n"));
+            if json.get("type")?.as_str()? != "message_end" { return None; }
+            let msg = json.get("message")?;
+            // Skip user messages
+            if msg.get("role")?.as_str()? != "assistant" { return None; }
+            // Check for error
+            if let Some(err) = msg.get("errorMessage").and_then(|e| e.as_str()) {
+                if !err.is_empty() {
+                    return Some(format!("Agent error: {}", err));
                 }
             }
-            None
+            // Extract text content
+            let content = msg.get("content")?.as_array()?;
+            let texts: Vec<&str> = content
+                .iter()
+                .filter_map(|c| c.get("text")?.as_str())
+                .filter(|t| !t.is_empty())
+                .collect();
+            if texts.is_empty() { None }
+            else { Some(texts.join("\n")) }
         })
         .last()
-        .or_else(|| {
-            // Check for error message in the events
-            response.lines().filter_map(|line| {
-                let json: serde_json::Value = serde_json::from_str(line).ok()?;
-                let msg = json.get("message")?;
-                let err = msg.get("errorMessage")?.as_str()?;
-                Some(format!("Error: {}", err))
-            }).last()
-        })
         .unwrap_or_else(|| {
-            if response.is_empty() {
+            let first = response.lines().next().unwrap_or("");
+            if first.is_empty() {
                 "No response from agent.".to_string()
             } else {
-                format!("(raw events)\n{}", response)
+                format!("No assistant response. Raw output:\n{}",
+                    response.lines().take(5).collect::<Vec<_>>().join("\n"))
             }
         });
 
