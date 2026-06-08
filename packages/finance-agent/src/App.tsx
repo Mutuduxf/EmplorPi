@@ -396,6 +396,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     thinkingRef.current = "";
     setMessages((m) => [...m, { role: "assistant", text: "Thinking…", thinking: undefined }]);
 
+    // update() reads textRef/thinkingRef directly (no closure capture issues)
     const update = () => {
       setMessages((prev) => {
         const copy = [...prev];
@@ -409,13 +410,29 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     };
 
     const unlisteners: Array<() => void> = [];
+
+    const doThinkingFallback = () => {
+      if (!textRef.current && thinkingRef.current) {
+        textRef.current = thinkingRef.current;
+        thinkingRef.current = "";
+        update();
+      }
+    };
+
     try {
       const u1 = await listen<string>("stream:text", (e) => { textRef.current += e.payload; update(); });
       unlisteners.push(u1);
       const u2 = await listen<string>("stream:thinking", (e) => { thinkingRef.current = e.payload; update(); });
       unlisteners.push(u2);
-      const u3 = await listen<string>("stream:error", (e) => { textRef.current = `Error: ${e.payload}`; update(); });
+      const u3 = await listen<string>("stream:error", (e) => {
+        textRef.current = `Error: ${e.payload}`;
+        update();
+      });
       unlisteners.push(u3);
+      // When the sidecar times out (no text produced by reasoning model),
+      // Rust emits this event to trigger the thinking-as-text fallback.
+      const u4 = await listen("stream:show_thinking_as_text", doThinkingFallback);
+      unlisteners.push(u4);
 
       await invoke("send_prompt", { text: userText });
     } catch (e) {
@@ -424,13 +441,6 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     } finally {
       unlisteners.forEach((u) => u());
       setLoading(false);
-    }
-
-    // Fallback: if no text arrived but we have thinking, show thinking as text
-    if (!textRef.current && thinkingRef.current) {
-      textRef.current = thinkingRef.current;
-      thinkingRef.current = "";
-      update();
     }
   };
 

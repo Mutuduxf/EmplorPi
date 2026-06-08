@@ -147,9 +147,10 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<(), String> 
     ).await;
 
     if result.is_err() {
-        // Timeout — don't emit an error. The frontend will trigger its
-        // thinking-as-text fallback after invoke returns, since no text
-        // blocks arrived (DeepSeek reasoning models only produce thinking).
+        // Timeout — emit the last accumulated thinking as text so the
+        // frontend shows it. DeepSeek reasoning models only produce
+        // thinking blocks; no separate text blocks ever arrive.
+        let _ = app.emit("stream:show_thinking_as_text", "");
     }
 
     let _ = child.kill();
