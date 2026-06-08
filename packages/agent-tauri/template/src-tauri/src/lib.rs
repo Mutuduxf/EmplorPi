@@ -127,7 +127,7 @@ pub fn run() {
             send_prompt,
         ])
         .setup(|app| {
-            let dir = data_dir(app);
+            let dir = data_dir(&app.handle());
             std::fs::create_dir_all(dir.join("sessions"))
                 .expect("failed to create data/sessions directory");
             Ok(())
