@@ -106,7 +106,7 @@ function MessageBubble({ msg }: { msg: Message }) {
 
 // ── Sidebar ──
 
-function Sidebar({ sessions, currentPath, onNewChat, onSelectSession, onConfigure }: { sessions: SessionMeta[]; currentPath?: string; onNewChat: () => void; onSelectSession: (path: string) => void; onConfigure: () => void }) {
+function Sidebar({ sessions, currentPath, onNewChat, onSelectSession, onConfigure, themeMode, onToggleTheme }: { sessions: SessionMeta[]; currentPath?: string; onNewChat: () => void; onSelectSession: (path: string) => void; onConfigure: () => void; themeMode?: string; onToggleTheme?: () => void }) {
   const [search, setSearch] = useState("");
   const filtered = search.trim()
     ? sessions.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))
@@ -129,6 +129,8 @@ function Sidebar({ sessions, currentPath, onNewChat, onSelectSession, onConfigur
       </div>
       <div style={{ padding: "8px 10px", borderTop: "1px solid #eee", textAlign: "center" }}>
         <span onClick={onConfigure} style={{ fontSize: 12, color: "#888", cursor: "pointer" }}>Configure Keys</span>
+        <br />
+        <span onClick={onToggleTheme} style={{ fontSize: 12, color: "#888", cursor: "pointer" }}>{themeMode === "dark" ? "☀" : "🌙"}</span>
       </div>
     </div>
   );
@@ -177,7 +179,24 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [currentSessionPath, setCurrentSessionPath] = useState<string>();
   const [showExport, setShowExport] = useState(false);
+  const [themeMode, setThemeMode] = useState("auto");
   const textRef = useRef("");
+
+  // Dark mode CSS vars
+  useEffect(() => {
+    const root = document.documentElement;
+    const isDark = themeMode === "dark" || (themeMode === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    root.style.setProperty("--bg", isDark ? "#1e1e1e" : "#fff");
+    root.style.setProperty("--text", isDark ? "#ddd" : "#333");
+    root.style.setProperty("--border", isDark ? "#444" : "#ddd");
+    root.style.setProperty("--msg-user", isDark ? "#1a3a5c" : "#e3f2fd");
+    root.style.setProperty("--msg-assistant", isDark ? "#2d2d2d" : "#f5f5f5");
+    root.style.setProperty("--sidebar-bg", isDark ? "#252525" : "#fafafa");
+  }, [themeMode]);
+
+  const toggleTheme = useCallback(() => {
+    setThemeMode((t: string) => (t === "dark" ? "light" : "dark"));
+  }, []);
 
   const loadSessions = useCallback(async () => {
     try { setSessions(await invoke<SessionMeta[]>("list_sessions")); }
@@ -248,7 +267,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "system-ui" }}>
       <MenuBar onNewChat={newSession} onConfigure={onConfigure} onExport={() => setShowExport(true)} />
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <Sidebar sessions={sessions} currentPath={currentSessionPath} onNewChat={newSession} onSelectSession={handleSelectSession} onConfigure={onConfigure} />
+        <Sidebar sessions={sessions} currentPath={currentSessionPath} onNewChat={newSession} onSelectSession={handleSelectSession} onConfigure={onConfigure} themeMode={themeMode} onToggleTheme={toggleTheme} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
           <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
             {messages.map((m, i) => <MessageBubble key={i} msg={m} />)}
