@@ -4,7 +4,8 @@ import { listen } from "@tauri-apps/api/event";
 import { marked } from "marked";
 import hljs from "highlight.js";
 import "highlight.js/styles/github.css";
-import type { Message, SessionMeta, ModelInfo, ThemeMode, Page } from "./types";
+import type { Message, SessionMeta, ModelInfo, ThemeMode, Page, Lang } from "./types";
+import { t } from "./i18n";
 import Sidebar from "./Sidebar";
 import ExportDialog from "./ExportDialog";
 import TokenUsage from "./TokenUsage";
@@ -48,11 +49,13 @@ function ThinkingBlock({ content }: { content: string }) {
 
 // ── Message bubble ──
 
-function MessageBubble({ msg, onRegen }: { msg: Message; onRegen?: () => void }) {
+function MessageBubble({ msg, isLast, onRegen, onBranch }: { msg: Message; isLast?: boolean; onRegen?: () => void; onBranch?: () => void }) {
   const isUser = msg.role === "user";
   return (
     <div style={{ marginBottom: 12, maxWidth: "85%", marginLeft: isUser ? "auto" : 0, marginRight: isUser ? 0 : "auto" }}>
-      <div style={{ borderRadius: 10, padding: "10px 14px", background: isUser ? "var(--msg-user, #e3f2fd)" : "var(--msg-assistant, #f5f5f5)" }}>
+      <div style={{ borderRadius: 10, padding: "10px 14px", background: isUser ? "var(--msg-user, #e3f2fd)" : "var(--msg-assistant, #f5f5f5)" }}
+        onMouseEnter={(e) => { const b = e.currentTarget.querySelector(".branch-btn") as HTMLElement; if (b) b.style.display = "inline"; }}
+        onMouseLeave={(e) => { const b = e.currentTarget.querySelector(".branch-btn") as HTMLElement; if (b) b.style.display = "none"; }}>
         {!isUser && msg.thinking && <ThinkingBlock content={msg.thinking} />}
         {isUser ? (
           <div style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.5 }}>{msg.text}</div>
@@ -60,8 +63,14 @@ function MessageBubble({ msg, onRegen }: { msg: Message; onRegen?: () => void })
           <>
             <MarkdownBlock content={msg.text} />
             <TokenUsage usage={(msg as any).usage} />
-            {onRegen && <span onClick={onRegen} style={{ fontSize: 12, color: "#999", cursor: "pointer", marginTop: 4, display: "inline-block" }}>↻ Regenerate</span>}
+            <div style={{ marginTop: 4, display: "flex", gap: 8, alignItems: "center" }}>
+              {onRegen && <span onClick={onRegen} style={{ fontSize: 12, color: "#999", cursor: "pointer" }}>↻</span>}
+              {!isLast && onBranch && <span className="branch-btn" onClick={onBranch} style={{ fontSize: 12, color: "#999", cursor: "pointer", display: "none" }}>↪</span>}
+            </div>
           </>
+        )}
+        {isUser && !isLast && onBranch && (
+          <span className="branch-btn" onClick={onBranch} style={{ fontSize: 12, color: "#999", cursor: "pointer", display: "none" }}>↪</span>
         )}
       </div>
     </div>
@@ -189,6 +198,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [currentSessionPath, setCurrentSessionPath] = useState<string | undefined>();
   const [themeMode, setThemeMode] = useState<ThemeMode>("auto");
+  const [lang, setLang] = useState<Lang>("zh");
   const [models] = useState<ModelInfo[]>([
     { provider: "deepseek", modelId: "deepseek-v4-pro", name: "DeepSeek V4 Pro" },
     { provider: "deepseek", modelId: "deepseek-v4-flash", name: "DeepSeek V4 Flash" },
@@ -307,6 +317,10 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     setThemeMode((t) => (t === "dark" ? "light" : "dark"));
   }, []);
 
+  const toggleLang = useCallback(() => {
+    setLang((l) => (l === "zh" ? "en" : "zh"));
+  }, []);
+
   const newSession = useCallback(() => {
     setMessages([]);
     setCurrentSessionPath(undefined);
@@ -369,6 +383,9 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
           onSwitchModel={handleSwitchModel}
           themeMode={themeMode}
           onToggleTheme={toggleTheme}
+          onToggleLang={toggleLang}
+          language={lang}
+          t={(k) => t(lang, k)}
         />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px" }}>
@@ -387,7 +404,10 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
               return (
                 <div key={i} onClick={m.role === "user" ? () => handleEditClick(i, m.text) : undefined}
                   style={{ cursor: m.role === "user" && !loading ? "pointer" : "default" }}>
-                  <MessageBubble msg={m} onRegen={!loading && i === messages.length - 1 && m.role === "assistant" ? handleRegen : undefined} />
+                  <MessageBubble msg={m}
+                    isLast={i === messages.length - 1}
+                    onRegen={!loading && i === messages.length - 1 && m.role === "assistant" ? handleRegen : undefined}
+                    onBranch={() => { setMessages((prev) => prev.slice(0, i + 1)); }} />
                 </div>
               );
             })}

@@ -32,6 +32,8 @@ export interface ModelInfo {
   name: string;
 }
 
+export type Lang = "zh" | "en";
+
 export type ThemeMode = "light" | "dark" | "auto";
 export type ExportFormat = "txt" | "md" | "html";
 export type Page = "loading" | "setup" | "chat";

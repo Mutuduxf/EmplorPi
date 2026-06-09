@@ -109,13 +109,14 @@ fn list_sessions(app: tauri::AppHandle) -> Result<Vec<SessionMeta>, String> {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
+                // Read only first 30 lines for performance (header + first messages)
                 let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
                 let mut name = String::new();
                 let mut date = String::new();
                 let mut token_count = 0u32;
                 let mut message_count = 0u32;
                 let mut model = String::new();
-                for line in content.lines() {
+                for line in content.lines().take(30) {
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
                         match json.get("type").and_then(|t| t.as_str()) {
                             Some("session") => {
