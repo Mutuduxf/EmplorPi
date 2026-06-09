@@ -22,6 +22,15 @@ if (Test-Path $OutDir) { Remove-Item -Recurse -Force $OutDir }
 if (Test-Path (Join-Path $ScriptRoot "dist\web")) { Remove-Item -Recurse -Force (Join-Path $ScriptRoot "dist\web") }
 Write-Host "[OK]" -ForegroundColor Green
 
+# Rebuild agent-base dependency (compiles src/ to dist/)
+Write-Host "`n[0b] Rebuilding agent-base..." -ForegroundColor Cyan
+Push-Location (Join-Path $ScriptRoot "..\agent-base")
+try {
+  npm run build 2>&1 | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "agent-base build failed" }
+  Write-Host "[OK]" -ForegroundColor Green
+} finally { Pop-Location }
+
 # Step 1: Build Bun sidecar
 Write-Host "`n[1/3] Building Bun sidecar..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path $BinariesDir | Out-Null
