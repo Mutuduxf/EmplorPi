@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { Component, useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { marked } from "marked";
@@ -9,6 +9,23 @@ import { t } from "./i18n";
 import Sidebar from "./Sidebar";
 import ExportDialog from "./ExportDialog";
 import TokenUsage from "./TokenUsage";
+
+// ── Error boundary (catches React render errors) ──
+
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error) { console.error("React error:", error); }
+  render() {
+    if (this.state.error) {
+      return <div style={{ padding: 24, fontFamily: "monospace", fontSize: 13, color: "#d32f2f", whiteSpace: "pre-wrap" }}>
+        <strong>Render Error:</strong>
+        {this.state.error.message}\n{this.state.error.stack}
+      </div>;
+    }
+    return this.props.children;
+  }
+}
 
 // ── Markdown renderer ──
 
@@ -546,7 +563,7 @@ function App() {
   }, []);
   if (page === "loading") return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: "#999", fontFamily: "system-ui, -apple-system, sans-serif" }}>Loading…</div>;
   if (page === "setup") return <SetupPage onDone={goToChat} />;
-  return <ChatPage onConfigure={goToSetup} />;
+  return <ErrorBoundary><ChatPage onConfigure={goToSetup} /></ErrorBoundary>;
 }
 
 export default App;
