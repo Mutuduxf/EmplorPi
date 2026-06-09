@@ -310,9 +310,12 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
         .map_err(|e| { debug_log(&app, &format!("ERR sidecar config: {}", e)); e.to_string() })?
         .args(["--mode", "rpc"]);
 
-    if let Some(sf) = SESSION_FILE.lock().unwrap().as_ref() {
+    let session_path = SESSION_FILE.lock().unwrap().clone();
+    if let Some(ref sf) = session_path {
         cmd = cmd.args(["--session", sf]);
         debug_log(&app, &format!("resuming session: {}", sf));
+    } else {
+        debug_log(&app, "no session file yet, will create new");
     }
 
     // Enable read/grep/write tools
