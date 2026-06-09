@@ -312,7 +312,9 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
 
     let session_path = SESSION_FILE.lock().unwrap().clone();
     if let Some(ref sf) = session_path {
-        cmd = cmd.args(["--session", sf]);
+        // Strip \?\ prefix for Bun compatibility
+        let clean = sf.trim_start_matches(r"\\?\");
+        cmd = cmd.args(["--session", clean]);
         debug_log(&app, &format!("resuming session: {}", sf));
     } else {
         debug_log(&app, "no session file yet, will create new");
