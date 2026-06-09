@@ -241,6 +241,9 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
         debug_log(&app, &format!("resuming session: {}", sf));
     }
 
+    // Enable read/grep tools so the agent can examine files
+    cmd = cmd.args(["--allow-tools", "read,grep"]);
+
     let (mut rx, mut child) = cmd.spawn()
         .map_err(|e| { debug_log(&app, &format!("ERR spawn: {}", e)); e.to_string() })?;
     debug_log(&app, "sidecar spawned OK");

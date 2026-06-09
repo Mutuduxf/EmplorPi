@@ -388,7 +388,18 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
           t={(k) => t(lang, k)}
         />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px" }}>
+          <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px" }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const files = Array.from(e.dataTransfer.files);
+              if (files.length > 0) {
+                const paths = files.map((f) => f.path).join("\n");
+                setMessages((m) => [...m, { role: "user", text: `请分析以下文件：\n${paths}` }]);
+                setInput("");
+              }
+            }}
+            onDragOver={(e) => e.preventDefault()}
+          >
             {messages.length === 0 && !loading && <p style={{ color: "#bbb", textAlign: "center", marginTop: 80, fontSize: 14 }}>Start a conversation</p>}
             {messages.map((m, i) => {
               if (editingMsgIdx === i && m.role === "user") {

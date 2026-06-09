@@ -77,10 +77,19 @@ export interface DomainAgentOptions {
 	scopedModels?: Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel }>;
 
 	/**
+	/**
 	 * Whether to exclude the default coding tools (read, write, bash, edit).
 	 * Default: true (domain agents typically don't need coding tools).
 	 */
 	excludeDefaultTools?: boolean;
+
+	/**
+	 * Explicit allowlist of built-in tool names to enable.
+	 * E.g. ["read", "grep"] to let the agent read files without
+	 * enabling write, bash, or edit.
+	 * Takes precedence over excludeDefaultTools.
+	 */
+	allowTools?: string[];
 
 	/** Working directory. Default: process.cwd() */
 	cwd?: string;
@@ -322,7 +331,8 @@ export async function createDomainAgent(options: DomainAgentOptions = {}): Promi
 			model: options.model,
 			thinkingLevel: options.thinkingLevel,
 			scopedModels: options.scopedModels,
-			noTools: excludeDefaultTools ? "all" : undefined,
+			noTools: options.allowTools ? undefined : (excludeDefaultTools ? "all" : undefined),
+			tools: options.allowTools,
 			customTools: options.tools,
 		});
 
