@@ -224,6 +224,22 @@ fn abort_prompt() -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn csv_to_excel(csv_path: String, xlsx_path: String) -> Result<(), String> {
+    let csv_content = std::fs::read_to_string(&csv_path).map_err(|e| e.to_string())?;
+    let mut workbook = rust_xlsxwriter::Workbook::new();
+    let worksheet = workbook.add_worksheet();
+    
+    for (row, line) in csv_content.lines().enumerate() {
+        for (col, value) in line.split(',').enumerate() {
+            worksheet.write(row as u32, col as u16, value.trim()).map_err(|e| e.to_string())?;
+        }
+    }
+    
+    workbook.save(&xlsx_path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // ── send_prompt: collect all events, return structured JSON ──
 
 #[tauri::command]
@@ -242,7 +258,7 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
     }
 
     // Enable read/grep tools so the agent can examine files
-    cmd = cmd.args(["--allow-tools", "read,grep"]);
+    cmd = cmd.args(["--allow-tools", "read,grep,write"]);
 
     let (mut rx, mut child) = cmd.spawn()
         .map_err(|e| { debug_log(&app, &format!("ERR spawn: {}", e)); e.to_string() })?;
@@ -409,6 +425,7 @@ pub fn run() {
             check_auth_state, save_api_key, get_app_version, open_data_dir,
             send_prompt, list_sessions, delete_session, rename_session,
             export_session, switch_model, get_current_model, abort_prompt,
+            csv_to_excel,
         ])
         .setup(|app| {
             let dir = data_dir(&app.handle());
