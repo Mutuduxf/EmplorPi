@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { marked } from "marked";
 
@@ -17,13 +17,13 @@ type Page = "loading" | "setup" | "chat";
 marked.setOptions({ breaks: true, gfm: true });
 
 function MarkdownBlock({ content }: { content: string }) {
-  const html = useRef<string>("");
-  if (!html.current) {
-    html.current = marked.parse(content, { async: false }) as string;
-  }
+  const html = useMemo(() => {
+    try { return marked.parse(content, { async: false }) as string; }
+    catch { return content; }
+  }, [content]);
   return (
     <div
-      dangerouslySetInnerHTML={{ __html: html.current }}
+      dangerouslySetInnerHTML={{ __html: html }}
       style={{ lineHeight: 1.6, fontSize: 14 }}
     />
   );
@@ -69,7 +69,11 @@ function MessageBubble({ msg }: { msg: Message }) {
     <div style={{ marginBottom: 12, maxWidth: "85%", marginLeft: isUser ? "auto" : 0, marginRight: isUser ? 0 : "auto" }}>
       <div style={{ borderRadius: 10, padding: "10px 14px", background: isUser ? "#e3f2fd" : "#f5f5f5" }}>
         {!isUser && msg.thinking && <ThinkingBlock content={msg.thinking} />}
-        <div style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.5 }}>{msg.text}</div>
+        {isUser ? (
+          <div style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.5 }}>{msg.text}</div>
+        ) : (
+          <MarkdownBlock content={msg.text} />
+        )}
       </div>
     </div>
   );
