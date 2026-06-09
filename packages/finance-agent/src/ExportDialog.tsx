@@ -16,13 +16,9 @@ export default function ExportDialog({ sessionPath, onClose }: Props) {
     setExporting(true);
     try {
       const content = await invoke<string>("export_session", { path: sessionPath, format });
-      const blob = new Blob([content], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `chat-export.${format}`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const filename = `chat-${Date.now()}.${format}`;
+      const savedPath = await invoke<string>("save_export", { content, filename });
+      alert(`Exported to:\n${savedPath}`);
     } catch (e) {
       alert(`Export failed: ${e}`);
     } finally {

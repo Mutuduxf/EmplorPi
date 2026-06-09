@@ -263,6 +263,15 @@ fn get_system_prompt() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
+fn save_export(app: tauri::AppHandle, content: String, filename: String) -> Result<String, String> {
+    let dir = data_dir(&app).join("exports");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(&filename);
+    std::fs::write(&path, &content).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 fn get_session_path() -> Result<Option<String>, String> {
     Ok(SESSION_FILE.lock().unwrap().clone())
 }
@@ -480,7 +489,7 @@ pub fn run() {
             send_prompt, list_sessions, delete_session, rename_session,
             export_session, switch_model, get_current_model,
             set_system_prompt, get_system_prompt,
-            get_settings, save_settings, get_session_path,
+            get_settings, save_settings, get_session_path, save_export,
             abort_prompt, csv_to_excel,
         ])
         .setup(|app| {
