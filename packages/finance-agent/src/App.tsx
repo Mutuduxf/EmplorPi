@@ -2,85 +2,73 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { marked } from "marked";
-
-// ── Types ──
-
-interface Message {
-  role: "user" | "assistant";
-  text: string;
-  thinking?: string;
-}
-
-type Page = "loading" | "setup" | "chat";
+import hljs from "highlight.js";
+import "highlight.js/styles/github.css";
+import type { Message, SessionMeta, ModelInfo, ThemeMode, Page } from "./types";
+import Sidebar from "./Sidebar";
+import ExportDialog from "./ExportDialog";
+import TokenUsage from "./TokenUsage";
 
 // ── Markdown renderer ──
 
-marked.setOptions({ breaks: true, gfm: true });
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+  highlight: (code: string, lang: string) => {
+    if (lang && hljs.getLanguage(lang)) {
+      try { return hljs.highlight(code, { language: lang }).value; }
+      catch { return code; }
+    }
+    return code;
+  },
+});
 
 function MarkdownBlock({ content }: { content: string }) {
   const html = useMemo(() => {
     try { return marked.parse(content, { async: false }) as string; }
     catch { return content; }
   }, [content]);
-  return (
-    <div
-      dangerouslySetInnerHTML={{ __html: html }}
-      style={{ lineHeight: 1.6, fontSize: 14 }}
-    />
-  );
+  return <div dangerouslySetInnerHTML={{ __html: html }} style={{ lineHeight: 1.6, fontSize: 14 }} />;
 }
 
-// ── Collapsible thinking block ──
+// ── Collapsible thinking ──
 
 function ThinkingBlock({ content }: { content: string }) {
   const [open, setOpen] = useState(false);
   return (
     <div style={{ marginBottom: 8, borderRadius: 6, border: "1px solid #e0e0e0", overflow: "hidden" }}>
-      <div
-        onClick={() => setOpen(!open)}
-        style={{
-          padding: "6px 10px", background: "#fafafa", cursor: "pointer",
-          fontSize: 12, color: "#888", display: "flex", alignItems: "center",
-          gap: 6, userSelect: "none",
-        }}
-      >
-        <span style={{ fontSize: 10 }}>{open ? "▼" : "▶"}</span>
-        Thinking
+      <div onClick={() => setOpen(!open)}
+        style={{ padding: "6px 10px", background: "#fafafa", cursor: "pointer", fontSize: 12, color: "#888", display: "flex", alignItems: "center", gap: 6, userSelect: "none" }}>
+        <span style={{ fontSize: 10 }}>{open ? "▼" : "▶"}</span>Thinking
       </div>
-      {open && (
-        <div
-          style={{
-            padding: "8px 10px", fontSize: 12, color: "#666",
-            background: "#fefefe", whiteSpace: "pre-wrap", lineHeight: 1.5,
-            maxHeight: 200, overflowY: "auto",
-          }}
-        >
-          {content}
-        </div>
-      )}
+      {open && <div style={{ padding: "8px 10px", fontSize: 12, color: "#666", background: "#fefefe", whiteSpace: "pre-wrap", lineHeight: 1.5, maxHeight: 200, overflowY: "auto" }}>{content}</div>}
     </div>
   );
 }
 
 // ── Message bubble ──
 
-function MessageBubble({ msg }: { msg: Message }) {
+function MessageBubble({ msg, onRegen }: { msg: Message; onRegen?: () => void }) {
   const isUser = msg.role === "user";
   return (
     <div style={{ marginBottom: 12, maxWidth: "85%", marginLeft: isUser ? "auto" : 0, marginRight: isUser ? 0 : "auto" }}>
-      <div style={{ borderRadius: 10, padding: "10px 14px", background: isUser ? "#e3f2fd" : "#f5f5f5" }}>
+      <div style={{ borderRadius: 10, padding: "10px 14px", background: isUser ? "var(--msg-user, #e3f2fd)" : "var(--msg-assistant, #f5f5f5)" }}>
         {!isUser && msg.thinking && <ThinkingBlock content={msg.thinking} />}
         {isUser ? (
           <div style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.5 }}>{msg.text}</div>
         ) : (
-          <MarkdownBlock content={msg.text} />
+          <>
+            <MarkdownBlock content={msg.text} />
+            <TokenUsage usage={(msg as any).usage} />
+            {onRegen && <span onClick={onRegen} style={{ fontSize: 12, color: "#999", cursor: "pointer", marginTop: 4, display: "inline-block" }}>↻ Regenerate</span>}
+          </>
         )}
       </div>
     </div>
   );
 }
 
-// ── Providers ──
+// ── Providers config ──
 
 const PROVIDERS = [
   { id: "anthropic", label: "Anthropic (Claude)" },
@@ -161,15 +149,15 @@ function MenuBar({ menus }: { menus: MenuDef[] }) {
     return () => document.removeEventListener("mousedown", handler);
   }, [openMenu]);
   return (
-    <div ref={barRef} style={{ display: "flex", alignItems: "center", height: 32, background: "#f5f5f5", borderBottom: "1px solid #ddd", userSelect: "none", fontFamily: "system-ui, -apple-system, sans-serif", fontSize: 13, position: "relative", flexShrink: 0 }}>
+    <div ref={barRef} style={{ display: "flex", alignItems: "center", height: 32, background: "var(--bg-secondary, #f5f5f5)", borderBottom: "1px solid var(--border, #ddd)", userSelect: "none", fontFamily: "system-ui, -apple-system, sans-serif", fontSize: 13, position: "relative", flexShrink: 0 }}>
       {menus.map((menu, mi) => (
         <div key={mi} style={{ position: "relative" }}>
-          <div onClick={() => setOpenMenu(openMenu === mi ? null : mi)} onMouseEnter={() => { if (openMenu !== null) setOpenMenu(mi); }} style={{ padding: "4px 10px", cursor: "pointer", borderRadius: 4, background: openMenu === mi ? "#e0e0e0" : "transparent", marginLeft: 2 }}>{menu.label}</div>
+          <div onClick={() => setOpenMenu(openMenu === mi ? null : mi)} onMouseEnter={() => { if (openMenu !== null) setOpenMenu(mi); }} style={{ padding: "4px 10px", cursor: "pointer", borderRadius: 4, background: openMenu === mi ? "#e0e0e0" : "transparent", marginLeft: 2, color: "var(--text, #333)" }}>{menu.label}</div>
           {openMenu === mi && (
-            <div style={{ position: "absolute", top: "100%", left: 0, minWidth: 180, background: "#fff", border: "1px solid #ccc", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", padding: "4px 0", zIndex: 50 }}>
+            <div style={{ position: "absolute", top: "100%", left: 0, minWidth: 180, background: "var(--bg, #fff)", border: "1px solid var(--border, #ccc)", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", padding: "4px 0", zIndex: 50 }}>
               {menu.items.map((item, ii) =>
-                item.type === "separator" ? <div key={ii} style={{ height: 1, background: "#e0e0e0", margin: "4px 8px" }} />
-                : <div key={ii} onClick={() => { setOpenMenu(null); item.action(); }} style={{ padding: "6px 16px", cursor: "pointer", fontSize: 13 }}
+                item.type === "separator" ? <div key={ii} style={{ height: 1, background: "var(--border, #e0e0e0)", margin: "4px 8px" }} />
+                : <div key={ii} onClick={() => { setOpenMenu(null); item.action(); }} style={{ padding: "6px 16px", cursor: "pointer", fontSize: 13, color: "var(--text, #333)" }}
                     onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "#f0f0f0"; }}
                     onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "transparent"; }}>{item.label}</div>
               )}
@@ -188,19 +176,67 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [lastUserText, setLastUserText] = useState("");
+  const [editingMsgIdx, setEditingMsgIdx] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
+  const [showExport, setShowExport] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  // Sidebar state
+  const [sessions, setSessions] = useState<SessionMeta[]>([]);
+  const [currentSessionPath, setCurrentSessionPath] = useState<string | undefined>();
+  const [themeMode, setThemeMode] = useState<ThemeMode>("auto");
+  const [models] = useState<ModelInfo[]>([
+    { provider: "deepseek", modelId: "deepseek-v4-pro", name: "DeepSeek V4 Pro" },
+    { provider: "deepseek", modelId: "deepseek-v4-flash", name: "DeepSeek V4 Flash" },
+  ]);
+  const [currentModel] = useState("deepseek/deepseek-v4-pro");
+
+  // Load sessions
+  const loadSessions = useCallback(async () => {
+    try { setSessions(await invoke<SessionMeta[]>("list_sessions")); }
+    catch { /* silent */ }
+  }, []);
+  useEffect(() => { loadSessions(); }, [loadSessions]);
+
+  // Dark mode CSS vars
+  useEffect(() => {
+    const root = document.documentElement;
+    const isDark = themeMode === "dark" || (themeMode === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    root.style.setProperty("--bg", isDark ? "#1e1e1e" : "#fff");
+    root.style.setProperty("--bg-secondary", isDark ? "#2d2d2d" : "#f5f5f5");
+    root.style.setProperty("--text", isDark ? "#ddd" : "#333");
+    root.style.setProperty("--text-secondary", isDark ? "#999" : "#666");
+    root.style.setProperty("--border", isDark ? "#444" : "#ddd");
+    root.style.setProperty("--msg-user", isDark ? "#1a3a5c" : "#e3f2fd");
+    root.style.setProperty("--msg-assistant", isDark ? "#2d2d2d" : "#f5f5f5");
+    root.style.setProperty("--sidebar-bg", isDark ? "#252525" : "#fafafa");
+  }, [themeMode]);
+
+  // Auto-scroll
+  useEffect(() => {
+    if (autoScroll) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, autoScroll]);
+
+  // Focus input after loading
   useEffect(() => { if (!loading) inputRef.current?.focus(); }, [loading]);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setAutoScroll(el.scrollHeight - el.scrollTop - el.clientHeight < 100);
+  }, []);
 
   const textRef = useRef("");
   const thinkingRef = useRef<string | undefined>(undefined);
 
-  const updateMsg = (text: string, thinking?: string) => {
+  const updateMsg = (text: string, thinking?: string, usage?: any) => {
     setMessages((prev) => {
       const copy = [...prev];
-      copy[copy.length - 1] = { role: "assistant", text, thinking };
+      copy[copy.length - 1] = { role: "assistant", text, thinking, usage } as Message;
       return copy;
     });
   };
@@ -208,6 +244,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   const send = useCallback(async () => {
     if (!input.trim() || loading) return;
     const userText = input;
+    setLastUserText(userText);
     setInput("");
     setMessages((m) => [...m, { role: "user", text: userText }]);
     setLoading(true);
@@ -225,31 +262,85 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
             thinkingRef.current = parsed.thinking ?? thinkingRef.current;
             updateMsg(textRef.current || "Thinking…", thinkingRef.current);
           }
-        } catch { /* skip unparseable */ }
+        } catch { /* skip */ }
       });
 
       const raw = await invoke<string>("send_prompt", { text: userText });
-
-      // Final update from the returned JSON
       try {
         const parsed = JSON.parse(raw);
         if (typeof parsed === "object" && parsed.text !== undefined) {
-          updateMsg(parsed.text, parsed.thinking);
+          updateMsg(parsed.text, parsed.thinking, parsed.usage);
         }
-      } catch { /* use raw as text */ updateMsg(raw); }
+      } catch { updateMsg(raw); }
     } catch (e) {
       updateMsg(`Error: ${e}`);
     } finally {
       unlisten?.();
       setLoading(false);
+      loadSessions();
     }
-  }, [input, loading]);
+  }, [input, loading, loadSessions]);
 
-  const newSession = () => { setMessages([]); inputRef.current?.focus(); };
+  // Session handlers
+  const handleSelectSession = useCallback(async (path: string) => {
+    setCurrentSessionPath(path);
+    setMessages([]);
+    // The sidecar will resume this session on next send
+  }, []);
+
+  const handleRenameSession = useCallback(async (path: string, name: string) => {
+    await invoke("rename_session", { path, name });
+    loadSessions();
+  }, [loadSessions]);
+
+  const handleDeleteSession = useCallback(async (path: string) => {
+    await invoke("delete_session", { path });
+    if (currentSessionPath === path) setCurrentSessionPath(undefined);
+    loadSessions();
+  }, [loadSessions, currentSessionPath]);
+
+  const handleSwitchModel = useCallback(async (provider: string, modelId: string) => {
+    await invoke("switch_model", { provider, modelId });
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setThemeMode((t) => (t === "dark" ? "light" : "dark"));
+  }, []);
+
+  const newSession = useCallback(() => {
+    setMessages([]);
+    setCurrentSessionPath(undefined);
+    inputRef.current?.focus();
+  }, []);
+
+  const handleRegen = useCallback(async () => {
+    if (!lastUserText) return;
+    setMessages((prev) => prev.slice(0, -1));
+    setInput(lastUserText);
+    setTimeout(() => send(), 0);
+  }, [lastUserText, send]);
+
+  const handleEditClick = useCallback((idx: number, text: string) => {
+    setEditingMsgIdx(idx);
+    setEditText(text);
+  }, []);
+
+  const handleEditSend = useCallback(async () => {
+    if (editingMsgIdx === null) return;
+    const newText = editText.trim();
+    if (!newText) return;
+    setMessages((prev) => [...prev.slice(0, editingMsgIdx), { role: "user", text: newText }]);
+    setEditingMsgIdx(null);
+    setInput(newText);
+    setLastUserText(newText);
+    setTimeout(() => send(), 0);
+  }, [editingMsgIdx, editText, send]);
 
   const menus: MenuDef[] = [
     { label: "File", items: [
       { type: "action", label: "New Session", action: newSession },
+      { type: "separator" },
+      { type: "action", label: "Export Chat…", action: () => setShowExport(true) },
       { type: "separator" },
       { type: "action", label: "Configure Keys…", action: onConfigure },
       { type: "separator" },
@@ -263,22 +354,66 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "system-ui, -apple-system, sans-serif", color: "var(--text, #333)", background: "var(--bg, #fff)" }}>
       <MenuBar menus={menus} />
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px" }}>
-        {messages.length === 0 && !loading && <p style={{ color: "#bbb", textAlign: "center", marginTop: 80, fontSize: 14 }}>Start a conversation</p>}
-        {messages.map((m, i) => <MessageBubble key={i} msg={m} />)}
-        <div ref={bottomRef} />
-      </div>
-      <div style={{ padding: "8px 16px 16px", borderTop: "1px solid #eee", display: "flex", gap: 8 }}>
-        <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()} placeholder="Type a message…" disabled={loading} autoFocus
-          style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 14, outline: "none" }} />
-        <button onClick={send} disabled={loading}
-          style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: loading ? "#90caf9" : "#1976d2", color: "#fff", fontSize: 14, fontWeight: 600, cursor: loading ? "default" : "pointer" }}>
-          {loading ? "…" : "Send"}
-        </button>
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+        <Sidebar
+          sessions={sessions}
+          currentPath={currentSessionPath}
+          models={models}
+          currentModel={currentModel}
+          onNewChat={newSession}
+          onSelectSession={handleSelectSession}
+          onRename={handleRenameSession}
+          onDelete={handleDeleteSession}
+          onSwitchModel={handleSwitchModel}
+          themeMode={themeMode}
+          onToggleTheme={toggleTheme}
+        />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px" }}>
+            {messages.length === 0 && !loading && <p style={{ color: "#bbb", textAlign: "center", marginTop: 80, fontSize: 14 }}>Start a conversation</p>}
+            {messages.map((m, i) => {
+              if (editingMsgIdx === i && m.role === "user") {
+                return (
+                  <div key={i} style={{ maxWidth: "85%", marginLeft: "auto", marginBottom: 12 }}>
+                    <textarea value={editText} onChange={(e) => setEditText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleEditSend(); } if (e.key === "Escape") setEditingMsgIdx(null); }}
+                      style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #1976d2", fontSize: 14, minHeight: 60, resize: "vertical", boxSizing: "border-box" }} />
+                    <div style={{ fontSize: 11, color: "#999", marginTop: 4 }}>Enter to send · Esc to cancel</div>
+                  </div>
+                );
+              }
+              return (
+                <div key={i} onClick={m.role === "user" ? () => handleEditClick(i, m.text) : undefined}
+                  style={{ cursor: m.role === "user" && !loading ? "pointer" : "default" }}>
+                  <MessageBubble msg={m} onRegen={!loading && i === messages.length - 1 && m.role === "assistant" ? handleRegen : undefined} />
+                </div>
+              );
+            })}
+            <div ref={bottomRef} />
+          </div>
+          <div style={{ padding: "8px 16px 16px", borderTop: "1px solid var(--border, #eee)", display: "flex", gap: 8 }}>
+            <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
+              placeholder="Type a message…" disabled={loading} autoFocus
+              style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border, #ccc)", fontSize: 14, outline: "none", background: "var(--bg, #fff)", color: "var(--text, #333)" }} />
+            {loading ? (
+              <button onClick={async () => { await invoke("abort_prompt"); setLoading(false); }}
+                style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "#d32f2f", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                ■ Stop
+              </button>
+            ) : (
+              <button onClick={send} disabled={loading}
+                style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "#1976d2", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                Send
+              </button>
+            )}
+          </div>
+        </div>
       </div>
       {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
+      {showExport && currentSessionPath && <ExportDialog sessionPath={currentSessionPath} onClose={() => setShowExport(false)} />}
     </div>
   );
 }
