@@ -25,26 +25,23 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Er
   }
 }
 
-// ── Markdown renderer (lazy import marked to avoid Vite bundling issues) ──
+// ── Simple Markdown renderer (no external deps) ──
 
-let _marked: any = null;
-async function getMarked() {
-  if (!_marked) {
-    const m = await import("marked");
-    m.marked.setOptions({ breaks: true, gfm: true });
-    _marked = m.marked;
-  }
-  return _marked;
+function simpleMarkdown(text: string): string {
+  return text
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/^### (.+)/gm, "<h3>$1</h3>")
+    .replace(/^## (.+)/gm, "<h2>$1</h2>")
+    .replace(/^# (.+)/gm, "<h1>$1</h1>")
+    .replace(/^- (.+)/gm, "<li>$1</li>")
+    .replace(/\n\n/g, "</p><p>")
+    .replace(/^(.+)$/gm, (m) => m.startsWith("<") ? m : `<span>${m}</span>`);
 }
 
 function MarkdownBlock({ content }: { content: string }) {
-  const [html, setHtml] = useState(content);
-  useEffect(() => {
-    getMarked().then((m) => {
-      try { setHtml(m.parse(content, { async: false }) as string); }
-      catch { setHtml(content); }
-    });
-  }, [content]);
+  const html = useMemo(() => simpleMarkdown(content), [content]);
   return <div dangerouslySetInnerHTML={{ __html: html }} style={{ lineHeight: 1.6, fontSize: 14 }} />;
 }
 
