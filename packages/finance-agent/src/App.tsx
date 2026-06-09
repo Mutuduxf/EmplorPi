@@ -106,18 +106,20 @@ function MessageBubble({ msg }: { msg: Message }) {
 
 // ── Sidebar ──
 
-function Sidebar({ sessions, currentPath, onNewChat, onSelectSession, onConfigure, onToggleTheme, themeMode }:
-  { sessions: SessionMeta[]; currentPath?: string; onNewChat: () => void; onSelectSession: (path: string) => void; onConfigure: () => void; onToggleTheme?: () => void; themeMode?: string }) {
-  { sessions: SessionMeta[]; currentPath?: string; onNewChat: () => void; onSelectSession: (path: string) => void; onConfigure: () => void }) {
+function Sidebar({ sessions, currentPath, onNewChat, onSelectSession, onConfigure }: { sessions: SessionMeta[]; currentPath?: string; onNewChat: () => void; onSelectSession: (path: string) => void; onConfigure: () => void }) {
+  const [search, setSearch] = useState("");
+  const filtered = search.trim()
+    ? sessions.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))
+    : sessions;
   return (
     <div style={{ width: 260, height: "100%", display: "flex", flexDirection: "column", borderRight: "1px solid #ddd", background: "#fafafa", fontFamily: "system-ui", flexShrink: 0 }}>
       <div style={{ padding: "8px 10px", borderBottom: "1px solid #eee" }}>
-        <button onClick={onNewChat} style={{ width: "100%", padding: "8px 0", borderRadius: 6, border: "1px solid #ccc", background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-          + New Chat
-        </button>
+        <button onClick={onNewChat} style={{ width: "100%", padding: "8px 0", borderRadius: 6, border: "1px solid #ccc", background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ New Chat</button>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…"
+          style={{ width: "100%", marginTop: 6, padding: "5px 8px", borderRadius: 4, border: "1px solid #ccc", fontSize: 12, boxSizing: "border-box" }} />
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "4px 6px" }}>
-        {sessions.map((s) => (
+        {filtered.map((s) => (
           <div key={s.path} onClick={() => onSelectSession(s.path)}
             style={{ padding: "6px 10px", cursor: "pointer", borderRadius: 6, background: s.path === currentPath ? "#e3f2fd" : "transparent", marginBottom: 1, fontSize: 13 }}>
             <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</div>
