@@ -2,9 +2,6 @@ import { Component, useState, useRef, useEffect, useCallback, useMemo } from "re
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { marked } from "marked";
-import { markedHighlight } from "marked-highlight";
-import hljs from "highlight.js";
-import "highlight.js/styles/github.css";
 import type { Message, SessionMeta, ModelInfo, ThemeMode, Page, Lang } from "./types";
 import { t } from "./i18n";
 import Sidebar from "./Sidebar";
@@ -29,17 +26,6 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Er
 }
 
 // ── Markdown renderer ──
-
-marked.use(markedHighlight({
-  langPrefix: "hljs language-",
-  highlight(code: string, lang: string) {
-    if (lang && hljs.getLanguage(lang)) {
-      try { return hljs.highlight(code, { language: lang }).value; }
-      catch { return code; }
-    }
-    return code;
-  },
-}));
 
 marked.setOptions({ breaks: true, gfm: true });
 
