@@ -41,4 +41,7 @@ todo.md
 plans/
 .pi/hf-sessions/
 .pi/hf-sessions-backup/
+
+# Superpowers / brainstorming
+docs/superpowers/
 collect.sh
