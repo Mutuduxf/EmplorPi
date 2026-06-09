@@ -920,7 +920,8 @@ export class SessionManager {
 		}
 
 		if (!this.flushed) {
-			const fd = openSync(this.sessionFile, "wx");
+			// Use "w" (not "wx") to allow overwriting existing session files on resume
+			const fd = openSync(this.sessionFile, "w");
 			try {
 				for (const e of this.fileEntries) {
 					writeFileSync(fd, `${JSON.stringify(e)}\n`);

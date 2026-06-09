@@ -1,5 +1,5 @@
 import { join, dirname } from "node:path";
-import { writeFileSync, appendFileSync, existsSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync } from "node:fs";
 import { createDomainAgent } from "@earendil-works/agent-base";
 
 const dataDir = join(dirname(process.execPath), "data");
@@ -14,12 +14,11 @@ const arg = (name: string) => {
   return idx >= 0 ? process.argv[idx + 1] : undefined;
 };
 
-const sessionFile = arg("--session");
-debug(`sessionFile=${sessionFile}`);
+const sessionFileArg = arg("--session");
+debug(`sessionFile=${sessionFileArg}`);
+if (sessionFileArg) debug(`file exists: ${existsSync(sessionFileArg)}`);
 
-if (sessionFile) {
-  debug(`file exists: ${existsSync(sessionFile)}`);
-}
+const sessionsDir = join(dataDir, "sessions");
 
 const allowTools = arg("--allow-tools")?.split(",");
 const systemPrompt = arg("--system-prompt");
@@ -30,8 +29,33 @@ const agent = await createDomainAgent({
   skillDirs: ["./skills"],
   allowTools,
   thinkingLevel: "medium",
-  sessionFile,
+  sessionFile: sessionFileArg,
 });
 
-debug("createDomainAgent done, entering RPC mode");
+// Check session file after createDomainAgent
+const filesAfterCreate = readdirSync(sessionsDir).filter((f) => f.endsWith(".jsonl")).sort();
+debug(`files after createDomainAgent: [${filesAfterCreate.join(", ")}]`);
+
+// Check the agent's session file path
+let sessionFilePath: string | undefined;
+try {
+  const getSessionFile = agent.session.sessionManager.getSessionFile;
+  if (getSessionFile) {
+    // @ts-expect-error
+    sessionFilePath = getSessionFile();
+    debug(`session.sessionFile=${sessionFilePath}`);
+  }
+} catch (e) {
+  debug(`error getting sessionFile: ${e}`);
+}
+
+// Add a periodic check using setInterval to see if session file changes
+const checkInterval = setInterval(() => {
+  const files = readdirSync(sessionsDir).filter((f) => f.endsWith(".jsonl")).sort();
+  debug(`files check: [${files.join(", ")}]`);
+}, 1000);
+
 await agent.runRpc();
+
+clearInterval(checkInterval);
+debug("RPC mode ended");
