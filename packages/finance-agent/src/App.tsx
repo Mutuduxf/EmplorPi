@@ -539,12 +539,14 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
 
 function App() {
   const [page, setPage] = useState<Page>("loading");
+  const goToChat = useCallback(() => setPage("chat"), []);
+  const goToSetup = useCallback(() => setPage("setup"), []);
   useEffect(() => {
     invoke<boolean>("check_auth_state").then((hasKeys) => setPage(hasKeys ? "chat" : "setup")).catch(() => setPage("setup"));
   }, []);
   if (page === "loading") return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: "#999", fontFamily: "system-ui, -apple-system, sans-serif" }}>Loading…</div>;
-  if (page === "setup") return <SetupPage onDone={() => setPage("chat")} />;
-  return <ChatPage onConfigure={() => setPage("setup")} />;
+  if (page === "setup") return <SetupPage onDone={goToChat} />;
+  return <ChatPage onConfigure={goToSetup} />;
 }
 
 export default App;
