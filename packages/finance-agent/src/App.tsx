@@ -53,7 +53,7 @@ function MenuBar({ onNewChat, onConfigure, onExport }: { onNewChat: () => void; 
   }, [openMenu]);
 
   return (
-    <div ref={barRef} style={{ display: "flex", alignItems: "center", height: 32, background: "#f5f5f5", borderBottom: "1px solid #ddd", userSelect: "none", fontFamily: "system-ui", fontSize: 13, flexShrink: 0 }}>
+    <div ref={barRef} style={{ display: "flex", alignItems: "center", height: 32, background: "var(--msg-assistant, #f5f5f5)", borderBottom: "1px solid #ddd", userSelect: "none", fontFamily: "system-ui", fontSize: 13, flexShrink: 0 }}>
       {menus.map((menu, mi) => (
         <div key={mi} style={{ position: "relative" }}>
           <div onClick={() => setOpenMenu(openMenu === mi ? null : mi)}
@@ -62,7 +62,7 @@ function MenuBar({ onNewChat, onConfigure, onExport }: { onNewChat: () => void; 
             {menu.label}
           </div>
           {openMenu === mi && (
-            <div style={{ position: "absolute", top: "100%", left: 0, minWidth: 180, background: "#fff", border: "1px solid #ccc", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", padding: "4px 0", zIndex: 50 }}>
+            <div style={{ position: "absolute", top: "100%", left: 0, minWidth: 180, background: "var(--bg, #fff)", border: "1px solid var(--border, #ccc)", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", padding: "4px 0", zIndex: 50 }}>
               {menu.items.map((item, ii) =>
                 item.type === "separator"
                   ? <div key={ii} style={{ height: 1, background: "#e0e0e0", margin: "4px 8px" }} />
@@ -83,7 +83,7 @@ function ThinkingBlock({ content }: { content: string }) {
   return (
     <div style={{ marginBottom: 8, borderRadius: 6, border: "1px solid #e0e0e0", overflow: "hidden" }}>
       <div onClick={() => setOpen(!open)}
-        style={{ padding: "6px 10px", background: "#fafafa", cursor: "pointer", fontSize: 12, color: "#888", display: "flex", alignItems: "center", gap: 6, userSelect: "none" }}>
+        style={{ padding: "6px 10px", background: "var(--sidebar-bg, #fafafa)", cursor: "pointer", fontSize: 12, color: "var(--text-secondary, #888)", display: "flex", alignItems: "center", gap: 6, userSelect: "none" }}>
         <span>{open ? "▼" : "▶"}</span> Thinking
       </div>
       {open && <div style={{ padding: "8px 10px", fontSize: 12, color: "#666", background: "#fefefe", whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{content}</div>}
@@ -96,7 +96,7 @@ function ThinkingBlock({ content }: { content: string }) {
 function MessageBubble({ msg }: { msg: Message }) {
   return (
     <div style={{ marginBottom: 8, maxWidth: "80%", marginLeft: msg.role === "user" ? "auto" : 0 }}>
-      <div style={{ padding: "8px 12px", borderRadius: 8, background: msg.role === "user" ? "#e3f2fd" : "#f5f5f5", whiteSpace: "pre-wrap" }}>
+      <div style={{ padding: "8px 12px", borderRadius: 8, background: msg.role === "user" ? "var(--msg-user, #e3f2fd)" : "var(--msg-assistant, #f5f5f5)", whiteSpace: "pre-wrap" }}>
         {msg.role === "assistant" && msg.thinking && <ThinkingBlock content={msg.thinking} />}
         {msg.text}
       </div>
@@ -112,25 +112,25 @@ function Sidebar({ sessions, currentPath, onNewChat, onSelectSession, onConfigur
     ? sessions.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))
     : sessions;
   return (
-    <div style={{ width: 260, height: "100%", display: "flex", flexDirection: "column", borderRight: "1px solid #ddd", background: "#fafafa", fontFamily: "system-ui", flexShrink: 0 }}>
-      <div style={{ padding: "8px 10px", borderBottom: "1px solid #eee" }}>
-        <button onClick={onNewChat} style={{ width: "100%", padding: "8px 0", borderRadius: 6, border: "1px solid #ccc", background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ New Chat</button>
+    <div style={{ width: 260, height: "100%", display: "flex", flexDirection: "column", borderRight: "1px solid var(--border, #ddd)", background: "var(--sidebar-bg, #fafafa)", fontFamily: "system-ui", flexShrink: 0 }}>
+      <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--border, #eee)" }}>
+        <button onClick={onNewChat} style={{ width: "100%", padding: "8px 0", borderRadius: 6, border: "1px solid var(--border, #ccc)", background: "var(--bg, #fff)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ New Chat</button>
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…"
-          style={{ width: "100%", marginTop: 6, padding: "5px 8px", borderRadius: 4, border: "1px solid #ccc", fontSize: 12, boxSizing: "border-box" }} />
+          style={{ width: "100%", marginTop: 6, padding: "5px 8px", borderRadius: 4, border: "1px solid var(--border, #ccc)", fontSize: 12, boxSizing: "border-box" }} />
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "4px 6px" }}>
         {filtered.map((s) => (
           <div key={s.path} onClick={() => onSelectSession(s.path)}
-            style={{ padding: "6px 10px", cursor: "pointer", borderRadius: 6, background: s.path === currentPath ? "#e3f2fd" : "transparent", marginBottom: 1, fontSize: 13 }}>
+            style={{ padding: "6px 10px", cursor: "pointer", borderRadius: 6, background: s.path === currentPath ? "var(--msg-user, #e3f2fd)" : "transparent", marginBottom: 1, fontSize: 13 }}>
             <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</div>
-            <div style={{ fontSize: 11, color: "#999" }}>{s.date?.slice(0, 10)} · {s.messageCount} msgs</div>
+            <div style={{ fontSize: 11, color: "var(--text-secondary, #999)" }}>{s.date?.slice(0, 10)} · {s.messageCount} msgs</div>
           </div>
         ))}
       </div>
-      <div style={{ padding: "8px 10px", borderTop: "1px solid #eee", textAlign: "center" }}>
-        <span onClick={onConfigure} style={{ fontSize: 12, color: "#888", cursor: "pointer" }}>Configure Keys</span>
+      <div style={{ padding: "8px 10px", borderTop: "1px solid var(--border, #eee)", textAlign: "center" }}>
+        <span onClick={onConfigure} style={{ fontSize: 12, color: "var(--text-secondary, #888)", cursor: "pointer" }}>Configure Keys</span>
         <br />
-        <span onClick={onToggleTheme} style={{ fontSize: 12, color: "#888", cursor: "pointer" }}>{themeMode === "dark" ? "☀" : "🌙"}</span>
+        <span onClick={onToggleTheme} style={{ fontSize: 12, color: "var(--text-secondary, #888)", cursor: "pointer" }}>{themeMode === "dark" ? "☀" : "🌙"}</span>
       </div>
     </div>
   );
@@ -155,12 +155,12 @@ function SetupPage({ onDone }: { onDone: () => void }) {
       <h1>Welcome</h1>
       <p style={{ color: "#666", marginBottom: 24 }}>Choose your LLM provider and enter an API key.</p>
       <select value={provider} onChange={(e) => setProvider(e.target.value)}
-        style={{ width: "100%", padding: 10, marginBottom: 16, borderRadius: 6, border: "1px solid #ccc" }}>
+        style={{ width: "100%", padding: 10, marginBottom: 16, borderRadius: 6, border: "1px solid var(--border, #ccc)" }}>
         {PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
       </select>
       <input type="password" value={key} onChange={(e) => setKey(e.target.value)}
         placeholder="API Key"
-        style={{ width: "100%", padding: 10, marginBottom: 12, borderRadius: 6, border: "1px solid #ccc", boxSizing: "border-box" }} />
+        style={{ width: "100%", padding: 10, marginBottom: 12, borderRadius: 6, border: "1px solid var(--border, #ccc)", boxSizing: "border-box" }} />
       {error && <p style={{ color: "#d32f2f", fontSize: 13 }}>{error}</p>}
       <button onClick={handleSave} disabled={saving}
         style={{ width: "100%", padding: 10, borderRadius: 6, border: "none", background: "#1976d2", color: "#fff", fontSize: 16, cursor: "pointer" }}>
@@ -189,8 +189,8 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     root.style.setProperty("--bg", isDark ? "#1e1e1e" : "#fff");
     root.style.setProperty("--text", isDark ? "#ddd" : "#333");
     root.style.setProperty("--border", isDark ? "#444" : "#ddd");
-    root.style.setProperty("--msg-user", isDark ? "#1a3a5c" : "#e3f2fd");
-    root.style.setProperty("--msg-assistant", isDark ? "#2d2d2d" : "#f5f5f5");
+    root.style.setProperty("--msg-user", isDark ? "#1a3a5c" : "var(--msg-user, #e3f2fd)");
+    root.style.setProperty("--msg-assistant", isDark ? "#2d2d2d" : "var(--msg-assistant, #f5f5f5)");
     root.style.setProperty("--sidebar-bg", isDark ? "#252525" : "#fafafa");
   }, [themeMode]);
 
@@ -274,7 +274,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
           </div>
           <div style={{ padding: 16, borderTop: "1px solid #eee", display: "flex", gap: 8 }}>
             <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
-              style={{ flex: 1, padding: 10, borderRadius: 6, border: "1px solid #ccc", fontSize: 14 }} />
+              style={{ flex: 1, padding: 10, borderRadius: 6, border: "1px solid var(--border, #ccc)", fontSize: 14 }} />
             <button onClick={send} disabled={loading}
               style={{ padding: "10px 20px", borderRadius: 6, border: "none", background: "#1976d2", color: "#fff", cursor: "pointer" }}>
               {loading ? "…" : "Send"}
@@ -295,7 +295,7 @@ function App() {
       .then((hasKeys) => setPage(hasKeys ? "chat" : "setup"))
       .catch(() => setPage("setup"));
   }, []);
-  if (page === "loading") return <div style={{ padding: 40, fontFamily: "system-ui", color: "#999" }}>Loading…</div>;
+  if (page === "loading") return <div style={{ padding: 40, fontFamily: "system-ui", color: "var(--text-secondary, #999)" }}>Loading…</div>;
   if (page === "setup") return <SetupPage onDone={() => setPage("chat")} />;
   return <ChatPage onConfigure={goToSetup} />;
 }
