@@ -106,7 +106,8 @@ function MessageBubble({ msg }: { msg: Message }) {
 
 // ── Sidebar ──
 
-function Sidebar({ sessions, currentPath, onNewChat, onSelectSession, onConfigure }:
+function Sidebar({ sessions, currentPath, onNewChat, onSelectSession, onConfigure, onToggleTheme, themeMode }:
+  { sessions: SessionMeta[]; currentPath?: string; onNewChat: () => void; onSelectSession: (path: string) => void; onConfigure: () => void; onToggleTheme?: () => void; themeMode?: string }) {
   { sessions: SessionMeta[]; currentPath?: string; onNewChat: () => void; onSelectSession: (path: string) => void; onConfigure: () => void }) {
   return (
     <div style={{ width: 260, height: "100%", display: "flex", flexDirection: "column", borderRight: "1px solid #ddd", background: "#fafafa", fontFamily: "system-ui", flexShrink: 0 }}>
