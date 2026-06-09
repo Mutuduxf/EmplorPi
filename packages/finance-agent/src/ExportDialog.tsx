@@ -12,7 +12,7 @@ export default function ExportDialog({ sessionPath, onClose }: Props) {
   const [exporting, setExporting] = useState(false);
 
   const handleExport = async () => {
-    if (!sessionPath) return;
+    if (!sessionPath) { alert("No session to export."); return; }
     setExporting(true);
     try {
       const content = await invoke<string>("export_session", { path: sessionPath, format });
@@ -45,7 +45,7 @@ export default function ExportDialog({ sessionPath, onClose }: Props) {
         </div>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button onClick={onClose} style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid #ccc", background: "#fff", cursor: "pointer", fontSize: 13 }}>Cancel</button>
-          <button onClick={handleExport} disabled={exporting || !sessionPath} style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#1976d2", color: "#fff", cursor: "pointer", fontSize: 13 }}>{exporting ? "Exporting…" : "Export"}</button>
+          <button onClick={handleExport} disabled={exporting} style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#1976d2", color: "#fff", cursor: "pointer", fontSize: 13 }}>{exporting ? "Exporting…" : "Export"}</button>
         </div>
       </div>
     </div>
