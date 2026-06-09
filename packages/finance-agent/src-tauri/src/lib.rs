@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
@@ -85,11 +86,149 @@ fn open_in_explorer(path: &str) -> Result<(), std::io::Error> {
     Ok(())
 }
 
+// ── Session management ──
+
+static ABORT_FLAG: AtomicBool = AtomicBool::new(false);
+static CURRENT_MODEL: Mutex<Option<String>> = Mutex::new(None);
+
+#[derive(Serialize)]
+struct SessionMeta {
+    path: String,
+    name: String,
+    date: String,
+    token_count: u32,
+    message_count: u32,
+    model: String,
+}
+
+#[tauri::command]
+fn list_sessions(app: tauri::AppHandle) -> Result<Vec<SessionMeta>, String> {
+    let sessions_dir = data_dir(&app).join("sessions");
+    let mut list = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&sessions_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
+                let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+                let mut name = String::new();
+                let mut date = String::new();
+                let mut token_count = 0u32;
+                let mut message_count = 0u32;
+                let mut model = String::new();
+                for line in content.lines() {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
+                        match json.get("type").and_then(|t| t.as_str()) {
+                            Some("session") => {
+                                date = json.get("timestamp").and_then(|t| t.as_str()).unwrap_or("").to_string();
+                            }
+                            Some("model_change") => {
+                                if let Some(m) = json.get("modelId").and_then(|m| m.as_str()) {
+                                    model = format!("{}/{}", json.get("provider").and_then(|p| p.as_str()).unwrap_or("?"), m);
+                                }
+                            }
+                            Some("message") => {
+                                message_count += 1;
+                                if name.is_empty() {
+                                    if let Some(text) = json.get("message").and_then(|m| m.get("content")).and_then(|c| c.get(0)).and_then(|b| b.get("text")).and_then(|t| t.as_str()) {
+                                        name = text.chars().take(50).collect();
+                                    }
+                                }
+                                if let Some(usage) = json.get("message").and_then(|m| m.get("usage")) {
+                                    if let Some(t) = usage.get("totalTokens").and_then(|t| t.as_u64()) {
+                                        token_count += t as u32;
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                list.push(SessionMeta {
+                    path: path.to_string_lossy().to_string(),
+                    name: if name.is_empty() { "Untitled".to_string() } else { name },
+                    date,
+                    token_count,
+                    message_count,
+                    model,
+                });
+            }
+        }
+    }
+    list.sort_by(|a, b| b.date.cmp(&a.date));
+    Ok(list)
+}
+
+#[tauri::command]
+fn delete_session(path: String) -> Result<(), String> {
+    std::fs::remove_file(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn rename_session(path: String, name: String) -> Result<(), String> {
+    let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+    if let Some(first) = lines.first_mut() {
+        if let Ok(mut json) = serde_json::from_str::<serde_json::Value>(first) {
+            if let Some(obj) = json.as_object_mut() {
+                obj.insert("name".to_string(), serde_json::Value::String(name));
+                *first = serde_json::to_string(&json).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    std::fs::write(&path, lines.join("\n")).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn export_session(path: String, format: String) -> Result<String, String> {
+    let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let mut plain = String::new();
+    let mut md = String::new();
+    let mut html_parts: Vec<String> = Vec::new();
+    html_parts.push("<!DOCTYPE html><html><head><meta charset='utf-8'><title>Chat Export</title><style>body{font-family:system-ui;max-width:800px;margin:auto;padding:20px}.msg{margin:12px 0;padding:12px;border-radius:8px}.user{background:#e3f2fd}.assistant{background:#f5f5f5}</style></head><body>".to_string());
+    for line in content.lines() {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
+            if json.get("type").and_then(|t| t.as_str()) != Some("message") { continue; }
+            let role = json.get("message").and_then(|m| m.get("role")).and_then(|r| r.as_str()).unwrap_or("");
+            let text = json.get("message").and_then(|m| m.get("content")).and_then(|c| c.as_array())
+                .and_then(|arr| arr.iter().find(|b| b.get("type").and_then(|t| t.as_str()) == Some("text")))
+                .and_then(|b| b.get("text")).and_then(|t| t.as_str()).unwrap_or("");
+            plain.push_str(&format!("[{}]: {}\n---\n", role, text));
+            md.push_str(&format!("**{}**: {}\n\n", role, text));
+            html_parts.push(format!("<div class='msg {}'><strong>{}</strong><br>{}</div>", role, role, text));
+        }
+    }
+    html_parts.push("</body></html>".to_string());
+    match format.as_str() {
+        "txt" => Ok(plain),
+        "md" => Ok(md),
+        "html" => Ok(html_parts.join("\n")),
+        _ => Err("Invalid format. Use txt, md, or html.".to_string()),
+    }
+}
+
+#[tauri::command]
+fn switch_model(provider: String, model_id: String) -> Result<(), String> {
+    *CURRENT_MODEL.lock().unwrap() = Some(format!("{}/{}", provider, model_id));
+    Ok(())
+}
+
+#[tauri::command]
+fn get_current_model() -> Result<Option<String>, String> {
+    Ok(CURRENT_MODEL.lock().unwrap().clone())
+}
+
+#[tauri::command]
+fn abort_prompt() -> Result<(), String> {
+    ABORT_FLAG.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
 // ── send_prompt: collect all events, return structured JSON ──
 
 #[tauri::command]
 async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, String> {
     debug_log(&app, "send_prompt START");
+    ABORT_FLAG.store(false, Ordering::SeqCst);
 
     // Use persistent session file across calls
     let mut cmd = app.shell().sidecar("agent-sidecar")
@@ -117,6 +256,10 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
 
     while !(got_assistant_msg && got_agent_end) {
+        if ABORT_FLAG.load(Ordering::SeqCst) {
+            debug_log(&app, "abort flag set, breaking");
+            break;
+        }
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
         if remaining.is_zero() { debug_log(&app, "loop END (deadline)"); break; }
 
@@ -259,7 +402,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
-            check_auth_state, save_api_key, get_app_version, open_data_dir, send_prompt,
+            check_auth_state, save_api_key, get_app_version, open_data_dir,
+            send_prompt, list_sessions, delete_session, rename_session,
+            export_session, switch_model, get_current_model, abort_prompt,
         ])
         .setup(|app| {
             let dir = data_dir(&app.handle());
