@@ -223,6 +223,11 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
       unlisten?.();
       setLoading(false);
       loadSessions();
+      // Update session path for export
+      try {
+        const sp = await invoke<string | null>("get_session_path");
+        if (sp) setCurrentSessionPath(sp);
+      } catch {}
     }
   }, [input, loading, loadSessions]);
 

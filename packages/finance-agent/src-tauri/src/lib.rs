@@ -263,6 +263,11 @@ fn get_system_prompt() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
+fn get_session_path() -> Result<Option<String>, String> {
+    Ok(SESSION_FILE.lock().unwrap().clone())
+}
+
+#[tauri::command]
 fn abort_prompt() -> Result<(), String> {
     ABORT_FLAG.store(true, Ordering::SeqCst);
     Ok(())
@@ -475,7 +480,7 @@ pub fn run() {
             send_prompt, list_sessions, delete_session, rename_session,
             export_session, switch_model, get_current_model,
             set_system_prompt, get_system_prompt,
-            get_settings, save_settings,
+            get_settings, save_settings, get_session_path,
             abort_prompt, csv_to_excel,
         ])
         .setup(|app| {
