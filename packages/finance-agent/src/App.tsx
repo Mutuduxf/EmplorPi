@@ -1,7 +1,7 @@
 import { Component, useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { marked } from "marked";
+
 import type { Message, SessionMeta, ModelInfo, ThemeMode, Page, Lang } from "./types";
 import { t } from "./i18n";
 import Sidebar from "./Sidebar";
@@ -25,14 +25,25 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Er
   }
 }
 
-// ── Markdown renderer ──
+// ── Markdown renderer (lazy import marked to avoid Vite bundling issues) ──
 
-marked.setOptions({ breaks: true, gfm: true });
+let _marked: any = null;
+async function getMarked() {
+  if (!_marked) {
+    const m = await import("marked");
+    m.marked.setOptions({ breaks: true, gfm: true });
+    _marked = m.marked;
+  }
+  return _marked;
+}
 
 function MarkdownBlock({ content }: { content: string }) {
-  const html = useMemo(() => {
-    try { return marked.parse(content, { async: false }) as string; }
-    catch { return content; }
+  const [html, setHtml] = useState(content);
+  useEffect(() => {
+    getMarked().then((m) => {
+      try { setHtml(m.parse(content, { async: false }) as string); }
+      catch { setHtml(content); }
+    });
   }, [content]);
   return <div dangerouslySetInnerHTML={{ __html: html }} style={{ lineHeight: 1.6, fontSize: 14 }} />;
 }
