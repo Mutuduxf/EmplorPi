@@ -114,7 +114,7 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
     let mut event_count = 0u32;
     let mut got_assistant_msg = false;
     let mut got_agent_end = false;
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(120);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
 
     while !(got_assistant_msg && got_agent_end) {
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
@@ -125,8 +125,8 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
             Ok(Some(CommandEvent::Stdout(data))) => {
                 let s = String::from_utf8_lossy(&data);
                 event_count += 1;
-                if event_count <= 5 {
-                    debug_log(&app, &format!("event {}: {}", event_count, s.trim().chars().take(120).collect::<String>()));
+                if event_count <= 3 {
+                    debug_log(&app, &format!("event {}: {:.120}", event_count, s.trim()));
                 }
                 all_output.push_str(&s);
                 // Track completion
@@ -203,7 +203,7 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
     };
 
     let json = serde_json::to_string(&result).map_err(|e| e.to_string())?;
-    debug_log(&app, &format!("returning {} bytes: {:.120}", json.len(), json));
+    debug_log(&app, &format!("returning {} bytes", json.len()));
     Ok(json)
 }
 
