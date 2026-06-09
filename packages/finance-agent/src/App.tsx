@@ -193,6 +193,8 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
   const [systemPromptText, setSystemPromptText] = useState("");
   const [savingPrompt, setSavingPrompt] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchMatchIdx, setSearchMatchIdx] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -215,6 +217,35 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   }, []);
   useEffect(() => { loadSessions(); }, [loadSessions]);
 
+  // Restore settings on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await invoke<string>("get_settings");
+        const s = JSON.parse(raw);
+        if (s.language) setLang(s.language);
+        if (s.theme) setThemeMode(s.theme);
+        if (s.last_session_path) setCurrentSessionPath(s.last_session_path);
+        if (s.system_prompt) setSystemPromptText(s.system_prompt);
+      } catch {}
+    })();
+  }, []);
+
+  // Save settings when they change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      invoke("save_settings", {
+        json: JSON.stringify({
+          language: lang,
+          theme: themeMode,
+          last_session_path: currentSessionPath,
+          system_prompt: systemPromptText || undefined,
+        }),
+      }).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [lang, themeMode, currentSessionPath, systemPromptText]);
+
   // Dark mode CSS vars
   useEffect(() => {
     const root = document.documentElement;
@@ -236,6 +267,19 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
 
   // Focus input after loading
   useEffect(() => { if (!loading) inputRef.current?.focus(); }, [loading]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === "E") { setShowExport(true); e.preventDefault(); }
+      if (e.ctrlKey && e.key === "n") { newSession(); e.preventDefault(); }
+      if (e.ctrlKey && e.key === ",") { onConfigure(); e.preventDefault(); }
+      if (e.ctrlKey && e.shiftKey && e.key === "D") { toggleTheme(); e.preventDefault(); }
+      if (e.ctrlKey && e.key === "f") { setSearchQuery(""); setSearchMatchIdx(0); e.preventDefault(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [newSession, onConfigure, toggleTheme]);
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -409,6 +453,17 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
             }}
             onDragOver={(e) => e.preventDefault()}
           >
+            {searchQuery && (
+              <div style={{ padding: "4px 0", display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#999" }}>
+                <input value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setSearchMatchIdx(0); }}
+                  placeholder="Search messages…" autoFocus
+                  style={{ flex: 1, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--border, #ccc)", fontSize: 12 }} />
+                <span>{searchMatchIdx + 1}/{messages.filter(m => m.text.toLowerCase().includes(searchQuery.toLowerCase())).length}</span>
+                <span onClick={() => setSearchMatchIdx((i) => Math.min(i + 1, messages.length - 1))} style={{ cursor: "pointer" }}>↓</span>
+                <span onClick={() => setSearchMatchIdx((i) => Math.max(i - 1, 0))} style={{ cursor: "pointer" }}>↑</span>
+                <span onClick={() => setSearchQuery("")} style={{ cursor: "pointer", color: "#d32f2f" }}>✕</span>
+              </div>
+            )}
             {messages.length === 0 && !loading && <p style={{ color: "#bbb", textAlign: "center", marginTop: 80, fontSize: 14 }}>Start a conversation</p>}
             {messages.map((m, i) => {
               if (editingMsgIdx === i && m.role === "user") {

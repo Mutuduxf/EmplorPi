@@ -219,6 +219,38 @@ fn get_current_model() -> Result<Option<String>, String> {
     Ok(CURRENT_MODEL.lock().unwrap().clone())
 }
 
+fn settings_path(app: &tauri::AppHandle) -> PathBuf {
+    data_dir(app).join("settings.json")
+}
+
+#[derive(Serialize, Deserialize)]
+struct AppSettings {
+    language: Option<String>,
+    theme: Option<String>,
+    last_session_path: Option<String>,
+    last_model: Option<String>,
+    system_prompt: Option<String>,
+}
+
+#[tauri::command]
+fn get_settings(app: tauri::AppHandle) -> Result<String, String> {
+    let path = settings_path(&app);
+    if path.exists() {
+        std::fs::read_to_string(&path).map_err(|e| e.to_string())
+    } else {
+        Ok("{}".to_string())
+    }
+}
+
+#[tauri::command]
+fn save_settings(app: tauri::AppHandle, json: String) -> Result<(), String> {
+    let path = settings_path(&app);
+    // Parse to validate, then write
+    let _: AppSettings = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+    std::fs::write(&path, &json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 fn set_system_prompt(prompt: String) -> Result<(), String> {
     *SYSTEM_PROMPT.lock().unwrap() = Some(prompt);
@@ -442,8 +474,9 @@ pub fn run() {
             check_auth_state, save_api_key, get_app_version, open_data_dir,
             send_prompt, list_sessions, delete_session, rename_session,
             export_session, switch_model, get_current_model,
-            set_system_prompt, get_system_prompt, abort_prompt,
-            csv_to_excel,
+            set_system_prompt, get_system_prompt,
+            get_settings, save_settings,
+            abort_prompt, csv_to_excel,
         ])
         .setup(|app| {
             let dir = data_dir(&app.handle());

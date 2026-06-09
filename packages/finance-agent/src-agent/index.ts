@@ -4,6 +4,7 @@
 
 import { join, dirname } from "node:path";
 import { createDomainAgent } from "@earendil-works/agent-base";
+import { webSearchTool } from "./tools/web-search.ts";
 
 const dataDir = join(dirname(process.execPath), "data");
 
@@ -20,6 +21,7 @@ const systemPrompt = arg("--system-prompt");
 const agent = await createDomainAgent({
   dataDir,
   systemPrompt: systemPrompt ?? "You are a financial analysis assistant. You help users with financial data analysis, report generation, and market insights. When the user references a file path, use the read tool to examine it.",
+  tools: [webSearchTool],
   skillDirs: ["./skills"],
   allowTools,
   thinkingLevel: "medium",
