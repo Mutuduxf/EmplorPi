@@ -69,11 +69,7 @@ function MessageBubble({ msg }: { msg: Message }) {
     <div style={{ marginBottom: 12, maxWidth: "85%", marginLeft: isUser ? "auto" : 0, marginRight: isUser ? 0 : "auto" }}>
       <div style={{ borderRadius: 10, padding: "10px 14px", background: isUser ? "#e3f2fd" : "#f5f5f5" }}>
         {!isUser && msg.thinking && <ThinkingBlock content={msg.thinking} />}
-        {isUser ? (
-          <div style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.5 }}>{msg.text}</div>
-        ) : (
-          <MarkdownBlock content={msg.text} />
-        )}
+        <div style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.5 }}>{msg.text}</div>
       </div>
     </div>
   );
