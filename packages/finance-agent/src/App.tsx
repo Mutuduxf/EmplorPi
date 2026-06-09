@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { marked } from "marked";
 
 // ── Types ──
@@ -193,38 +194,53 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
   useEffect(() => { if (!loading) inputRef.current?.focus(); }, [loading]);
 
+  const textRef = useRef("");
+  const thinkingRef = useRef<string | undefined>(undefined);
+
+  const updateMsg = (text: string, thinking?: string) => {
+    setMessages((prev) => {
+      const copy = [...prev];
+      copy[copy.length - 1] = { role: "assistant", text, thinking };
+      return copy;
+    });
+  };
+
   const send = useCallback(async () => {
     if (!input.trim() || loading) return;
     const userText = input;
     setInput("");
     setMessages((m) => [...m, { role: "user", text: userText }]);
     setLoading(true);
-    setMessages((m) => [...m, { role: "assistant", text: "Thinking…" }]);
+    textRef.current = "";
+    thinkingRef.current = undefined;
+    setMessages((m) => [...m, { role: "assistant", text: "Thinking…", thinking: undefined }]);
 
+    let unlisten: (() => void) | undefined;
     try {
+      unlisten = await listen<string>("stream:update", (e) => {
+        try {
+          const parsed = JSON.parse(e.payload);
+          if (typeof parsed === "object") {
+            textRef.current = parsed.text ?? textRef.current;
+            thinkingRef.current = parsed.thinking ?? thinkingRef.current;
+            updateMsg(textRef.current || "Thinking…", thinkingRef.current);
+          }
+        } catch { /* skip unparseable */ }
+      });
+
       const raw = await invoke<string>("send_prompt", { text: userText });
-      let text = raw;
-      let thinking: string | undefined;
+
+      // Final update from the returned JSON
       try {
         const parsed = JSON.parse(raw);
         if (typeof parsed === "object" && parsed.text !== undefined) {
-          text = parsed.text;
-          thinking = parsed.thinking;
+          updateMsg(parsed.text, parsed.thinking);
         }
-      } catch { /* use raw */ }
-
-      setMessages((prev) => {
-        const copy = [...prev];
-        copy[copy.length - 1] = { role: "assistant", text: text || "(empty)", thinking };
-        return copy;
-      });
+      } catch { /* use raw as text */ updateMsg(raw); }
     } catch (e) {
-      setMessages((prev) => {
-        const copy = [...prev];
-        copy[copy.length - 1] = { role: "assistant", text: `Error: ${e}` };
-        return copy;
-      });
+      updateMsg(`Error: ${e}`);
     } finally {
+      unlisten?.();
       setLoading(false);
     }
   }, [input, loading]);

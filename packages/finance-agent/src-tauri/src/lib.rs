@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 
@@ -129,13 +129,19 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
                     debug_log(&app, &format!("event {}: {:.120}", event_count, s.trim()));
                 }
                 all_output.push_str(&s);
-                // Track completion
+                // Track completion and stream updates
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(&s) {
                     match json.get("type").and_then(|t| t.as_str()) {
                         Some("agent_end") => { got_agent_end = true; }
-                        Some("message_end") => {
+                        Some("message_end") | Some("message_update") => {
                             if json.get("message").and_then(|m| m.get("role")).and_then(|r| r.as_str()) == Some("assistant") {
-                                got_assistant_msg = true;
+                                if let Some(msg) = json.get("message") {
+                                    let content = extract_content(msg);
+                                    let _ = app.emit("stream:update", content.to_string());
+                                }
+                                if json.get("type").and_then(|t| t.as_str()) == Some("message_end") {
+                                    got_assistant_msg = true;
+                                }
                             }
                         }
                         _ => {}
