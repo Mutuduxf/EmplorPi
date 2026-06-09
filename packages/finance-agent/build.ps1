@@ -15,10 +15,10 @@ if (-not $OutDir) { $OutDir = Join-Path $ScriptRoot "dist" "Finance Agent" }
 Write-Host "=== Building Finance Agent ===" -ForegroundColor Cyan
 Write-Host "      (clean build)" -ForegroundColor Cyan
 
-# Clean previous build artifacts (skip locked files)
+# Clean previous build artifacts
 Write-Host "`n[0/3] Cleaning previous build..." -ForegroundColor Cyan
-if (Test-Path $BinariesDir) { Remove-Item -Recurse -Force $BinariesDir -ErrorAction SilentlyContinue }
-if (Test-Path $OutDir) { Remove-Item -Recurse -Force "$OutDir\*" -Exclude "data" -ErrorAction SilentlyContinue }
+if (Test-Path $BinariesDir) { Remove-Item -Recurse -Force $BinariesDir }
+if (Test-Path $OutDir) { Remove-Item -Recurse -Force $OutDir }
 if (Test-Path (Join-Path $ScriptRoot "dist\web")) { Remove-Item -Recurse -Force (Join-Path $ScriptRoot "dist\web") }
 Write-Host "[OK]" -ForegroundColor Green
 
