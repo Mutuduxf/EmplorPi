@@ -190,6 +190,9 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   const [editingMsgIdx, setEditingMsgIdx] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
   const [showExport, setShowExport] = useState(false);
+  const [showSystemPrompt, setShowSystemPrompt] = useState(false);
+  const [systemPromptText, setSystemPromptText] = useState("");
+  const [savingPrompt, setSavingPrompt] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -354,6 +357,12 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     { label: "File", items: [
       { type: "action", label: "New Session", action: newSession },
       { type: "separator" },
+      { type: "action", label: "System Prompt…", action: async () => {
+        const existing = await invoke<string | null>("get_system_prompt");
+        setSystemPromptText(existing ?? "");
+        setShowSystemPrompt(true);
+      } },
+      { type: "separator" },
       { type: "action", label: "Export Chat…", action: () => setShowExport(true) },
       { type: "separator" },
       { type: "action", label: "Configure Keys…", action: onConfigure },
@@ -445,6 +454,28 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
       </div>
       {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
       {showExport && currentSessionPath && <ExportDialog sessionPath={currentSessionPath} onClose={() => setShowExport(false)} />}
+      {showSystemPrompt && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
+          onClick={() => setShowSystemPrompt(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--bg, #fff)", borderRadius: 12, padding: 24, maxWidth: 600, width: "90%", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+            <h3 style={{ margin: "0 0 12px", fontSize: 16, color: "var(--text, #333)" }}>System Prompt</h3>
+            <p style={{ fontSize: 12, color: "#999", marginBottom: 8 }}>Changes take effect on the next message.</p>
+            <textarea value={systemPromptText} onChange={(e) => setSystemPromptText(e.target.value)}
+              style={{ width: "100%", minHeight: 200, padding: 10, borderRadius: 6, border: "1px solid var(--border, #ccc)", fontSize: 13, fontFamily: "monospace", boxSizing: "border-box", resize: "vertical", background: "var(--bg, #fff)", color: "var(--text, #333)" }} />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+              <button onClick={() => setShowSystemPrompt(false)}
+                style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid var(--border, #ccc)", background: "var(--bg, #fff)", cursor: "pointer", fontSize: 13, color: "var(--text, #333)" }}>Cancel</button>
+              <button onClick={async () => {
+                setSavingPrompt(true);
+                await invoke("set_system_prompt", { prompt: systemPromptText });
+                setSavingPrompt(false);
+                setShowSystemPrompt(false);
+              }} disabled={savingPrompt}
+                style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#1976d2", color: "#fff", fontSize: 13, cursor: "pointer" }}>{savingPrompt ? "Saving…" : "Save"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

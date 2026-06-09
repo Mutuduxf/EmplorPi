@@ -90,6 +90,7 @@ fn open_in_explorer(path: &str) -> Result<(), std::io::Error> {
 
 static ABORT_FLAG: AtomicBool = AtomicBool::new(false);
 static CURRENT_MODEL: Mutex<Option<String>> = Mutex::new(None);
+static SYSTEM_PROMPT: Mutex<Option<String>> = Mutex::new(None);
 
 #[derive(Serialize)]
 struct SessionMeta {
@@ -219,6 +220,17 @@ fn get_current_model() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
+fn set_system_prompt(prompt: String) -> Result<(), String> {
+    *SYSTEM_PROMPT.lock().unwrap() = Some(prompt);
+    Ok(())
+}
+
+#[tauri::command]
+fn get_system_prompt() -> Result<Option<String>, String> {
+    Ok(SYSTEM_PROMPT.lock().unwrap().clone())
+}
+
+#[tauri::command]
 fn abort_prompt() -> Result<(), String> {
     ABORT_FLAG.store(true, Ordering::SeqCst);
     Ok(())
@@ -257,8 +269,13 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
         debug_log(&app, &format!("resuming session: {}", sf));
     }
 
-    // Enable read/grep tools so the agent can examine files
+    // Enable read/grep/write tools
     cmd = cmd.args(["--allow-tools", "read,grep,write"]);
+
+    // Pass custom system prompt if set
+    if let Some(sp) = SYSTEM_PROMPT.lock().unwrap().as_ref() {
+        cmd = cmd.args(["--system-prompt", sp]);
+    }
 
     let (mut rx, mut child) = cmd.spawn()
         .map_err(|e| { debug_log(&app, &format!("ERR spawn: {}", e)); e.to_string() })?;
@@ -424,7 +441,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             check_auth_state, save_api_key, get_app_version, open_data_dir,
             send_prompt, list_sessions, delete_session, rename_session,
-            export_session, switch_model, get_current_model, abort_prompt,
+            export_session, switch_model, get_current_model,
+            set_system_prompt, get_system_prompt, abort_prompt,
             csv_to_excel,
         ])
         .setup(|app| {
