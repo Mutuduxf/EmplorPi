@@ -181,7 +181,7 @@ function SetupPage({ onDone }: { onDone: () => void }) {
   const handleSave = async () => {
     if (!key.trim()) { setError("Enter an API key"); return; }
     setSaving(true); setError("");
-    try { await invoke("save_api_key", { provider, key: key.trim() }); onDone(); }
+    try { await invoke("save_api_key", { provider, key: key.trim() }); await invoke("switch_model", { provider, modelId: provider === "anthropic" ? "claude-sonnet-4-20250514" : provider === "deepseek" ? "deepseek-v4-pro" : provider === "openai" ? "gpt-4o" : "gemini-2.0-flash" }); onDone(); }
     catch (e) { setError(`Failed: ${e}`); }
     finally { setSaving(false); }
   };
