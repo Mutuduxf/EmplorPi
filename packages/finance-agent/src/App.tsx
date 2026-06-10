@@ -81,12 +81,12 @@ function MenuBar({ onNewChat, onConfigure, onExport }: { onNewChat: () => void; 
 function ThinkingBlock({ content }: { content: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ marginBottom: 8, borderRadius: 6, border: "1px solid #e0e0e0", overflow: "hidden" }}>
+    <div style={{ marginBottom: 8, borderRadius: 6, border: "1px solid var(--border, #e0e0e0)", overflow: "hidden" }}>
       <div onClick={() => setOpen(!open)}
         style={{ padding: "6px 10px", background: "var(--sidebar-bg, #fafafa)", cursor: "pointer", fontSize: 12, color: "var(--text-secondary, #888)", display: "flex", alignItems: "center", gap: 6, userSelect: "none" }}>
         <span>{open ? "▼" : "▶"}</span> Thinking
       </div>
-      {open && <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--text-secondary, #666)", background: "#fefefe", whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{content}</div>}
+      {open && <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--text, #666)", background: "var(--bg, #fefefe)", whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{content}</div>}
     </div>
   );
 }
@@ -94,8 +94,16 @@ function ThinkingBlock({ content }: { content: string }) {
 // ── Simple Markdown renderer ──
 
 function simpleMarkdown(text: string): string {
-  const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return escaped
+  let html = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // Tables
+  html = html.replace(/\n?(\|[^\n]+\|\n\|[-:| ]+\|)([\s\S]*?)(?=\n\n|\n[^|]|$)/g, (_, header, body) => {
+    const headers = header.split('|').filter((c: string) => c.trim()).map((c: string) => `<th>${c.trim()}</th>`).join('');
+    const rows = body.trim().split('\n').filter((r: string) => r.includes('|')).map((r: string) =>
+      `<tr>${r.split('|').filter((c: string) => c.trim()).map((c: string) => `<td>${c.trim()}</td>`).join('')}</tr>`
+    ).join('');
+    return `<table><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table>`;
+  });
+  html = html
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
     .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => `<pre><code>${code.trim()}</code></pre>`)
@@ -106,6 +114,7 @@ function simpleMarkdown(text: string): string {
     .replace(/^- (.+)/gm, (m) => `<li>${m.slice(2)}</li>`)
     .replace(/\n\n/g, "</p><p>")
     .replace(/^(.+)$/gm, (m) => m.startsWith("<") ? m : `<span>${m}</span>`);
+  return html;
 }
 
 // ── Message bubble ──
