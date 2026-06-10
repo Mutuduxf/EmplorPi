@@ -141,7 +141,11 @@ function MessageBubble({ msg }: { msg: Message }) {
 
 // ── Sidebar ──
 
-function Sidebar({ sessions, currentPath, onNewChat, onSelectSession, onConfigure, themeMode, onToggleTheme }: { sessions: SessionMeta[]; currentPath?: string; onNewChat: () => void; onSelectSession: (path: string) => void; onConfigure: () => void; themeMode?: string; onToggleTheme?: () => void }) {
+function Sidebar({ sessions, currentPath, onNewChat, onSelectSession, onConfigure, themeMode, onToggleTheme, availableModels, currentModel, onSwitchModel }: {
+  sessions: SessionMeta[]; currentPath?: string; onNewChat: () => void; onSelectSession: (path: string) => void;
+  onConfigure: () => void; themeMode?: string; onToggleTheme?: () => void;
+  availableModels?: Array<{provider: string; model_id: string; name: string}>; currentModel?: string; onSwitchModel?: (p: string, m: string) => void;
+}) {
   const [search, setSearch] = useState("");
   const filtered = search.trim()
     ? sessions.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))
@@ -162,10 +166,17 @@ function Sidebar({ sessions, currentPath, onNewChat, onSelectSession, onConfigur
           </div>
         ))}
       </div>
-      <div style={{ padding: "8px 10px", borderTop: "1px solid var(--border, #eee)", textAlign: "center" }}>
-        <span onClick={onConfigure} style={{ fontSize: 12, color: "var(--text-secondary, #888)", cursor: "pointer" }}>Configure Keys</span>
-        <br />
-        <span onClick={onToggleTheme} style={{ fontSize: 12, color: "var(--text-secondary, #888)", cursor: "pointer" }}>{themeMode === "dark" ? "☀" : "🌙"}</span>
+      <div style={{ padding: "8px 10px", borderTop: "1px solid var(--border, #eee)" }}>
+        <select value={currentModel || ""} onChange={(e) => { const [p, ...m] = e.target.value.split("/"); onSwitchModel?.(p, m.join("/")); }}
+          style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid var(--border, #ccc)", fontSize: 11, background: "var(--bg, #fff)", color: "var(--text, #333)" }}>
+          {(availableModels || []).map((md) => (
+            <option key={`${md.provider}/${md.model_id}`} value={`${md.provider}/${md.model_id}`}>{md.name}</option>
+          ))}
+        </select>
+        <div style={{ marginTop: 4, display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-secondary, #888)" }}>
+          <span onClick={onConfigure} style={{ cursor: "pointer" }}>Keys</span>
+          <span onClick={onToggleTheme} style={{ cursor: "pointer" }}>{themeMode === "dark" ? "☀" : "🌙"}</span>
+        </div>
       </div>
     </div>
   );
@@ -215,6 +226,8 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   const [currentSessionPath, setCurrentSessionPath] = useState<string>();
   const [showExport, setShowExport] = useState(false);
   const [themeMode, setThemeMode] = useState("auto");
+  const [availableModels, setAvailableModels] = useState<Array<{provider: string; model_id: string; name: string}>>([]);
+  const [currentModel, setCurrentModel] = useState("");
   const textRef = useRef("");
 
   // Dark mode CSS vars
@@ -243,6 +256,18 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   }, []);
 
   useEffect(() => { loadSessions(); }, [loadSessions]);
+
+  // Load available models
+  const loadModels = useCallback(async () => {
+    try {
+      const models = await invoke<Array<{provider: string; model_id: string; name: string}>>("list_available_models");
+      setAvailableModels(models);
+      if (!currentModel && models.length > 0) {
+        setCurrentModel(`${models[0].provider}/${models[0].model_id}`);
+      }
+    } catch {}
+  }, []);
+  useEffect(() => { loadModels(); }, [loadModels]);
 
   const send = useCallback(async () => {
     if (!input.trim() || loading) return;
@@ -306,7 +331,9 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "system-ui" }}>
       <MenuBar onNewChat={newSession} onConfigure={onConfigure} onExport={() => setShowExport(true)} />
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <Sidebar sessions={sessions} currentPath={currentSessionPath} onNewChat={newSession} onSelectSession={handleSelectSession} onConfigure={onConfigure} themeMode={themeMode} onToggleTheme={toggleTheme} />
+        <Sidebar sessions={sessions} currentPath={currentSessionPath} onNewChat={newSession} onSelectSession={handleSelectSession} onConfigure={onConfigure} themeMode={themeMode} onToggleTheme={toggleTheme}
+          availableModels={availableModels} currentModel={currentModel}
+          onSwitchModel={async (p, m) => { setCurrentModel(`${p}/${m}`); await invoke("switch_model", { provider: p, modelId: m }); }} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
           <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
             {messages.map((m, i) => <MessageBubble key={i} msg={m} />)}
