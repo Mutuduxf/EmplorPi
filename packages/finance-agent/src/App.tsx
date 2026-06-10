@@ -96,8 +96,8 @@ function ThinkingBlock({ content }: { content: string }) {
 function simpleMarkdown(text: string): string {
   let html = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   // Tables
-  html = html.replace(/\n?(\|[^\n]+\|\n\|[-:| ]+\|)([\s\S]*?)(?=\n\n|\n[^|]|$)/g, (_, header, body) => {
-    const headers = header.split('|').filter((c: string) => c.trim()).map((c: string) => `<th>${c.trim()}</th>`).join('');
+  html = html.replace(/\n?\|([^\n]+)\|\n\|([-:| ]+)\|([\s\S]*?)(?=\n\n|\n[^|]|$)/g, (_, h, sep, body) => {
+    const headers = h.split('|').map((c: string) => `<th>${c.trim()}</th>`).join('');
     const rows = body.trim().split('\n').filter((r: string) => r.includes('|')).map((r: string) =>
       `<tr>${r.split('|').filter((c: string) => c.trim()).map((c: string) => `<td>${c.trim()}</td>`).join('')}</tr>`
     ).join('');
