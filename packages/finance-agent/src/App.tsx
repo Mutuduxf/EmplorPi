@@ -328,20 +328,15 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     setLoading(true);
 
     let unlisten: (() => void) | undefined;
+    // Try streaming
     try {
-      try {
-        const tauri = (window as any).__TAURI__;
-        if (tauri?.event?.listen) unlisten = await tauri.event.listen("stream:update", (e: any) => {
-          try {
-            const p = typeof e.payload === "string" ? JSON.parse(e.payload) : e.payload;
-            if (typeof p === "object") {
-              textRef.current = p.text ?? textRef.current;
-              setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: textRef.current || "…", thinking: p.thinking }; return c; });
-            }
-          } catch {}
-        });
-      } catch {}
+      const { listen } = window.__TAURI__?.event || {};
+      if (listen) unlisten = await listen("stream:update", (e: any) => {
+        try { const p = JSON.parse(e.payload); if (typeof p === "object") { textRef.current = p.text ?? textRef.current; setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: textRef.current || "…", thinking: p.thinking }; return c; }); } } catch {}
+      });
+    } catch {}
 
+    try {
       const raw = await invoke<string>("send_prompt", { text });
       const parsed = JSON.parse(raw);
       if (typeof parsed === "object" && parsed.text !== undefined) {
