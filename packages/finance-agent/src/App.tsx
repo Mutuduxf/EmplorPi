@@ -320,8 +320,6 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   }, [themeMode]);
 
   const send = async (overrideText?: string, skipUser?: boolean) => {
-    // Fire-and-forget log to confirm send() runs
-    invoke("frontend_log", { msg: "send() called" }).catch(() => {});
     const text = (overrideText ?? input).trim();
     if (!text || loading) return;
     setInput("");
@@ -330,7 +328,24 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     setMessages((m) => [...m, { role: "assistant", text: "…" }]);
     setLoading(true);
 
+    // Set up streaming via Tauri events
+    let unlisten: (() => void) | undefined;
     try {
+      const { listen } = await import("@tauri-apps/api/event");
+      unlisten = await listen<string>("stream:update", (e) => {
+        try {
+          const p = JSON.parse(e.payload);
+          if (typeof p === "object") {
+            textRef.current = p.text ?? textRef.current;
+            setMessages((prev) => {
+              const c = [...prev];
+              c[c.length - 1] = { role: "assistant", text: textRef.current || "…", thinking: p.thinking };
+              return c;
+            });
+          }
+        } catch {}
+      });
+
       const raw = await invoke<string>("send_prompt", { text });
       const parsed = JSON.parse(raw);
       if (typeof parsed === "object" && parsed.text !== undefined) {
@@ -339,9 +354,9 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     } catch (e) {
       const errMsg = typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e);
       setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: `Error: ${errMsg}` }; return c; });
-      // Also try to log to file
-      try { invoke("frontend_log", { msg: `send error: ${errMsg}` }); } catch {}
+      invoke("frontend_log", { msg: `send error: ${errMsg}` }).catch(() => {});
     } finally {
+      unlisten?.();
       setLoading(false);
       loadSessions();
       try { const sp = await invoke<string | null>("get_session_path"); if (sp) setCurrentSessionPath(sp); } catch {}
@@ -358,23 +373,23 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     setLoading(false);
   }, []);
 
-  const handleRegen = useCallback(async () => {
+  const handleRegen = async () => {
     if (!lastUserText) return;
     send(lastUserText, true);
-  }, [lastUserText]);
+  };
 
   const handleEdit = useCallback((idx: number, text: string) => {
     setEditingIdx(idx);
     setEditText(text);
   }, []);
 
-  const handleEditSend = useCallback(async () => {
+  const handleEditSend = async () => {
     if (editingIdx === null || !editText.trim()) return;
     const newText = editText.trim();
     setMessages((prev) => [...prev.slice(0, editingIdx), { role: "user", text: newText }]);
     setEditingIdx(null);
     send(newText, true);
-  }, [editingIdx, editText]);
+  };
 
   const handleSelectSession = useCallback(async (path: string) => {
     setCurrentSessionPath(path);
