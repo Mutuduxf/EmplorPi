@@ -319,8 +319,8 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     return () => clearTimeout(timer);
   }, [themeMode]);
 
-  const send = async () => {
-    const text = input.trim();
+  const send = async (textOverride?: string) => {
+    const text = (textOverride ?? input).trim();
     if (!text || loading) return;
     setInput("");
     setLastUserText(text);
@@ -365,8 +365,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   const handleRegen = async () => {
     if (!lastUserText) return;
     setMessages((prev) => prev.slice(0, -1));
-    setInput(lastUserText);
-    setTimeout(() => send(), 0);
+    send(lastUserText);
   };
 
   const handleEdit = useCallback((idx: number, text: string) => { setEditingIdx(idx); setEditText(text); }, []);
@@ -376,8 +375,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     const newText = editText.trim();
     setMessages((prev) => [...prev.slice(0, editingIdx), { role: "user", text: newText }]);
     setEditingIdx(null);
-    setInput(newText);
-    setTimeout(() => send(), 0);
+    send(newText);
   };
 
   const newSession = useCallback(() => { setMessages([]); setCurrentSessionPath(undefined); }, []);
