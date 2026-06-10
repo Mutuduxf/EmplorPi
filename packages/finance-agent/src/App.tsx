@@ -86,7 +86,7 @@ function ThinkingBlock({ content }: { content: string }) {
         style={{ padding: "6px 10px", background: "var(--sidebar-bg, #fafafa)", cursor: "pointer", fontSize: 12, color: "var(--text-secondary, #888)", display: "flex", alignItems: "center", gap: 6, userSelect: "none" }}>
         <span>{open ? "▼" : "▶"}</span> Thinking
       </div>
-      {open && <div style={{ padding: "8px 10px", fontSize: 12, color: "#666", background: "#fefefe", whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{content}</div>}
+      {open && <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--text-secondary, #666)", background: "#fefefe", whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{content}</div>}
     </div>
   );
 }
@@ -153,7 +153,7 @@ function SetupPage({ onDone }: { onDone: () => void }) {
   return (
     <div style={{ padding: 40, maxWidth: 480, margin: "auto", fontFamily: "system-ui" }}>
       <h1>Welcome</h1>
-      <p style={{ color: "#666", marginBottom: 24 }}>Choose your LLM provider and enter an API key.</p>
+      <p style={{ color: "var(--text-secondary, #666)", marginBottom: 24 }}>Choose your LLM provider and enter an API key.</p>
       <select value={provider} onChange={(e) => setProvider(e.target.value)}
         style={{ width: "100%", padding: 10, marginBottom: 16, borderRadius: 6, border: "1px solid var(--border, #ccc)" }}>
         {PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
@@ -187,11 +187,15 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     const root = document.documentElement;
     const isDark = themeMode === "dark" || (themeMode === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
     root.style.setProperty("--bg", isDark ? "#1e1e1e" : "#fff");
-    root.style.setProperty("--text", isDark ? "#ddd" : "#333");
+    root.style.setProperty("--bg-secondary", isDark ? "#2d2d2d" : "#f5f5f5");
+    root.style.setProperty("--text", isDark ? "#e0e0e0" : "#333");
+    root.style.setProperty("--text-secondary", isDark ? "#999" : "#666");
     root.style.setProperty("--border", isDark ? "#444" : "#ddd");
     root.style.setProperty("--msg-user", isDark ? "#1a3a5c" : "var(--msg-user, #e3f2fd)");
     root.style.setProperty("--msg-assistant", isDark ? "#2d2d2d" : "var(--msg-assistant, #f5f5f5)");
     root.style.setProperty("--sidebar-bg", isDark ? "#252525" : "#fafafa");
+    root.style.color = "var(--text)";
+    root.style.background = "var(--bg)";
   }, [themeMode]);
 
   const toggleTheme = useCallback(() => {
