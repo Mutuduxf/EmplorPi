@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import ExportDialog from "./ExportDialog";
@@ -91,14 +91,40 @@ function ThinkingBlock({ content }: { content: string }) {
   );
 }
 
+// ── Simple Markdown renderer ──
+
+function simpleMarkdown(text: string): string {
+  const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return escaped
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => `<pre><code>${code.trim()}</code></pre>`)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/^### (.+)/gm, "<h3>$1</h3>")
+    .replace(/^## (.+)/gm, "<h2>$1</h2>")
+    .replace(/^# (.+)/gm, "<h1>$1</h1>")
+    .replace(/^- (.+)/gm, (m) => `<li>${m.slice(2)}</li>`)
+    .replace(/\n\n/g, "</p><p>")
+    .replace(/^(.+)$/gm, (m) => m.startsWith("<") ? m : `<span>${m}</span>`);
+}
+
 // ── Message bubble ──
+
+function MarkdownBlock({ content }: { content: string }) {
+  const html = useMemo(() => simpleMarkdown(content), [content]);
+  return <div dangerouslySetInnerHTML={{ __html: html }} style={{ lineHeight: 1.6, fontSize: 14 }} />;
+}
 
 function MessageBubble({ msg }: { msg: Message }) {
   return (
     <div style={{ marginBottom: 8, maxWidth: "80%", marginLeft: msg.role === "user" ? "auto" : 0 }}>
-      <div style={{ padding: "8px 12px", borderRadius: 8, background: msg.role === "user" ? "var(--msg-user, #e3f2fd)" : "var(--msg-assistant, #f5f5f5)", whiteSpace: "pre-wrap" }}>
+      <div style={{ padding: "8px 12px", borderRadius: 8, background: msg.role === "user" ? "var(--msg-user, #e3f2fd)" : "var(--msg-assistant, #f5f5f5)" }}>
         {msg.role === "assistant" && msg.thinking && <ThinkingBlock content={msg.thinking} />}
-        {msg.text}
+        {msg.role === "user" ? (
+          <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{msg.text}</div>
+        ) : (
+          <MarkdownBlock content={msg.text} />
+        )}
       </div>
     </div>
   );
