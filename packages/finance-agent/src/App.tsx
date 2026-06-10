@@ -116,7 +116,7 @@ function Sidebar({ sessions, currentPath, onNewChat, onSelectSession, onConfigur
       <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--border, #eee)" }}>
         <button onClick={onNewChat} style={{ width: "100%", padding: "8px 0", borderRadius: 6, border: "1px solid var(--border, #ccc)", background: "var(--bg, #fff)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ New Chat</button>
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…"
-          style={{ width: "100%", marginTop: 6, padding: "5px 8px", borderRadius: 4, border: "1px solid var(--border, #ccc)", fontSize: 12, boxSizing: "border-box" }} />
+          style={{ width: "100%", marginTop: 6, padding: "5px 8px", borderRadius: 4, border: "1px solid var(--border, #ccc)", fontSize: 12, boxSizing: "border-box", background: "var(--bg, #fff)", color: "var(--text, #333)" }} />
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "4px 6px" }}>
         {filtered.map((s) => (
@@ -278,7 +278,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
           </div>
           <div style={{ padding: 16, borderTop: "1px solid #eee", display: "flex", gap: 8 }}>
             <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
-              style={{ flex: 1, padding: 10, borderRadius: 6, border: "1px solid var(--border, #ccc)", fontSize: 14 }} />
+              style={{ flex: 1, padding: 10, borderRadius: 6, border: "1px solid var(--border, #ccc)", fontSize: 14, background: "var(--bg, #fff)", color: "var(--text, #333)" }} />
             <button onClick={send} disabled={loading}
               style={{ padding: "10px 20px", borderRadius: 6, border: "none", background: "#1976d2", color: "#fff", cursor: "pointer" }}>
               {loading ? "…" : "Send"}
