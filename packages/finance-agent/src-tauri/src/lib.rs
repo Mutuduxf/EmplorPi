@@ -24,6 +24,12 @@ fn data_dir(app: &tauri::AppHandle) -> PathBuf {
 fn auth_path(app: &tauri::AppHandle) -> PathBuf { data_dir(app).join("auth.json") }
 
 #[tauri::command]
+fn frontend_log(app: tauri::AppHandle, msg: String) -> Result<(), String> {
+    debug_log(&app, &format!("[frontend] {}", msg));
+    Ok(())
+}
+
+#[tauri::command]
 fn check_auth_state(app: tauri::AppHandle) -> Result<bool, String> {
     let path = auth_path(&app);
     if !path.exists() { return Ok(false); }
@@ -480,7 +486,7 @@ pub fn run() {
             check_auth_state, save_api_key, get_app_version, open_data_dir,
             send_prompt, list_sessions, delete_session, rename_session,
             export_session, list_available_models, load_session_messages,
-            switch_model, get_current_model,
+            switch_model, get_current_model, frontend_log,
             set_system_prompt, get_system_prompt,
             get_settings, save_settings, get_session_path, save_export,
             abort_prompt, csv_to_excel,

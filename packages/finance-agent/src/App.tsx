@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import ExportDialog from "./ExportDialog";
 import TokenUsage from "./TokenUsage";
 
@@ -325,50 +324,25 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     if (!text || loading) return;
     setInput("");
     setLastUserText(text);
-    if (!skipUser) {
-      setMessages((m) => [...m, { role: "user", text }]);
-    }
+    if (!skipUser) setMessages((m) => [...m, { role: "user", text }]);
     setMessages((m) => [...m, { role: "assistant", text: "…" }]);
     setLoading(true);
 
-    let unlisten: (() => void) | undefined;
     try {
-      unlisten = await listen<string>("stream:update", (e) => {
-        try {
-          const parsed = JSON.parse(e.payload);
-          if (typeof parsed === "object") {
-            textRef.current = parsed.text ?? textRef.current;
-            setMessages((prev) => {
-              const copy = [...prev];
-              copy[copy.length - 1] = { role: "assistant", text: textRef.current || "…", thinking: parsed.thinking };
-              return copy;
-            });
-          }
-        } catch { /* skip */ }
-      });
-
       const raw = await invoke<string>("send_prompt", { text });
-      try {
-        const parsed = JSON.parse(raw);
-        if (typeof parsed === "object" && parsed.text !== undefined) {
-          setMessages((prev) => {
-            const copy = [...prev];
-            copy[copy.length - 1] = { role: "assistant", text: parsed.text, thinking: parsed.thinking };
-            return copy;
-          });
-        }
-      } catch { /* use raw */ }
+      const parsed = JSON.parse(raw);
+      if (typeof parsed === "object" && parsed.text !== undefined) {
+        setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: parsed.text, thinking: parsed.thinking }; return c; });
+      }
     } catch (e) {
-      setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: `Error: ${e}` }; return c; });
+      const errMsg = typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e);
+      setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: `Error: ${errMsg}` }; return c; });
+      // Also try to log to file
+      try { invoke("frontend_log", { msg: `send error: ${errMsg}` }); } catch {}
     } finally {
-      unlisten?.();
       setLoading(false);
       loadSessions();
-      // Update session path for export
-      try {
-        const sp = await invoke<string | null>("get_session_path");
-        if (sp) setCurrentSessionPath(sp);
-      } catch {}
+      try { const sp = await invoke<string | null>("get_session_path"); if (sp) setCurrentSessionPath(sp); } catch {}
     }
   };
 
