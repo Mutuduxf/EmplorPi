@@ -124,9 +124,11 @@ function MarkdownBlock({ content }: { content: string }) {
   return <div dangerouslySetInnerHTML={{ __html: html }} style={{ lineHeight: 1.6, fontSize: 14 }} />;
 }
 
-function MessageBubble({ msg }: { msg: Message }) {
+function MessageBubble({ msg, isLast, onRegen, onEdit }: { msg: Message; isLast?: boolean; onRegen?: () => void; onEdit?: () => void }) {
   return (
-    <div style={{ marginBottom: 8, maxWidth: "80%", marginLeft: msg.role === "user" ? "auto" : 0 }}>
+    <div style={{ marginBottom: 8, maxWidth: "80%", marginLeft: msg.role === "user" ? "auto" : 0 }}
+      onMouseEnter={(e) => { const b = e.currentTarget.querySelector('.msg-actions') as HTMLElement; if (b) b.style.display = 'flex'; }}
+      onMouseLeave={(e) => { const b = e.currentTarget.querySelector('.msg-actions') as HTMLElement; if (b) b.style.display = 'none'; }}>
       <div style={{ padding: "8px 12px", borderRadius: 8, background: msg.role === "user" ? "var(--msg-user, #e3f2fd)" : "var(--msg-assistant, #f5f5f5)" }}>
         {msg.role === "assistant" && msg.thinking && <ThinkingBlock content={msg.thinking} />}
         {msg.role === "user" ? (
@@ -134,6 +136,10 @@ function MessageBubble({ msg }: { msg: Message }) {
         ) : (
           <MarkdownBlock content={msg.text} />
         )}
+        <div className="msg-actions" style={{ display: "none", gap: 6, marginTop: 4, fontSize: 12, color: "#999" }}>
+          {msg.role === "user" && onEdit && <span onClick={onEdit} style={{ cursor: "pointer" }}>✎ edit</span>}
+          {msg.role === "assistant" && isLast && onRegen && <span onClick={onRegen} style={{ cursor: "pointer" }}>↻ regen</span>}
+        </div>
       </div>
     </div>
   );
@@ -229,6 +235,22 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   const [availableModels, setAvailableModels] = useState<Array<{provider: string; model_id: string; name: string}>>([]);
   const [currentModel, setCurrentModel] = useState("");
   const textRef = useRef("");
+  const [lastUserText, setLastUserText] = useState("");
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+
+  useEffect(() => {
+    if (autoScroll) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, autoScroll]);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setAutoScroll(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+  }, []);
 
   // Dark mode CSS vars
   useEffect(() => {
@@ -277,10 +299,32 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   }, []);
   useEffect(() => { loadModels(); }, [loadModels]);
 
+  // Settings persistence: restore on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await invoke<string>("get_settings");
+        const s = JSON.parse(raw);
+        if (s.theme) setThemeMode(s.theme);
+      } catch {}
+    })();
+  }, []);
+
+  // Settings persistence: save on change (debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      invoke("save_settings", {
+        json: JSON.stringify({ theme: themeMode }),
+      }).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [themeMode]);
+
   const send = useCallback(async () => {
     if (!input.trim() || loading) return;
     const text = input;
     setInput("");
+    setLastUserText(text);
     setMessages((m) => [...m, { role: "user", text }, { role: "assistant", text: "…" }]);
     setLoading(true);
 
@@ -330,6 +374,33 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     setCurrentSessionPath(undefined);
   }, []);
 
+  const stopGeneration = useCallback(async () => {
+    try { await invoke("abort_prompt"); } catch {}
+    setLoading(false);
+  }, []);
+
+  const handleRegen = useCallback(async () => {
+    if (!lastUserText) return;
+    setMessages((prev) => prev.slice(0, -1));
+    setInput(lastUserText);
+    setTimeout(() => send(), 0);
+  }, [lastUserText, send]);
+
+  const handleEdit = useCallback((idx: number, text: string) => {
+    setEditingIdx(idx);
+    setEditText(text);
+  }, []);
+
+  const handleEditSend = useCallback(async () => {
+    if (editingIdx === null || !editText.trim()) return;
+    const newText = editText.trim();
+    setMessages((prev) => [...prev.slice(0, editingIdx), { role: "user", text: newText }]);
+    setEditingIdx(null);
+    setInput(newText);
+    setLastUserText(newText);
+    setTimeout(() => send(), 0);
+  }, [editingIdx, editText, send]);
+
   const handleSelectSession = useCallback((path: string) => {
     setCurrentSessionPath(path);
     setMessages([]);
@@ -343,16 +414,36 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
           availableModels={availableModels} currentModel={currentModel}
           onSwitchModel={async (p, m) => { setCurrentModel(`${p}/${m}`); await invoke("switch_model", { provider: p, modelId: m }); }} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-            {messages.map((m, i) => <MessageBubble key={i} msg={m} />)}
+          <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+            {messages.map((m, i) => editingIdx === i && m.role === "user" ? (
+              <div key={i} style={{ maxWidth: "80%", marginLeft: "auto", marginBottom: 8 }}>
+                <textarea value={editText} onChange={(e) => setEditText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleEditSend(); } if (e.key === "Escape") setEditingIdx(null); }}
+                  style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #1976d2", fontSize: 14, minHeight: 60, resize: "vertical", boxSizing: "border-box" }} />
+                <div style={{ fontSize: 11, color: "#999", marginTop: 4 }}>Enter to send · Esc to cancel</div>
+              </div>
+            ) : (
+              <MessageBubble key={i} msg={m}
+                isLast={i === messages.length - 1}
+                onRegen={i === messages.length - 1 && m.role === "assistant" ? () => handleRegen() : undefined}
+                onEdit={m.role === "user" ? () => handleEdit(i, m.text) : undefined} />
+            ))}
+            <div ref={bottomRef} />
           </div>
           <div style={{ padding: 16, borderTop: "1px solid #eee", display: "flex", gap: 8 }}>
             <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
               style={{ flex: 1, padding: 10, borderRadius: 6, border: "1px solid var(--border, #ccc)", fontSize: 14, background: "var(--bg, #fff)", color: "var(--text, #333)" }} />
-            <button onClick={send} disabled={loading}
-              style={{ padding: "10px 20px", borderRadius: 6, border: "none", background: "#1976d2", color: "#fff", cursor: "pointer" }}>
-              {loading ? "…" : "Send"}
-            </button>
+            {loading ? (
+              <button onClick={stopGeneration}
+                style={{ padding: "10px 20px", borderRadius: 6, border: "none", background: "#d32f2f", color: "#fff", cursor: "pointer", fontWeight: 600 }}>
+                ■ Stop
+              </button>
+            ) : (
+              <button onClick={send}
+                style={{ padding: "10px 20px", borderRadius: 6, border: "none", background: "#1976d2", color: "#fff", cursor: "pointer" }}>
+                Send
+              </button>
+            )}
           </div>
         </div>
       </div>
