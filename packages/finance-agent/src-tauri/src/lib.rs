@@ -471,15 +471,29 @@ fn extract_content(msg: &serde_json::Value) -> serde_json::Value {
     let text_str = text.join("\n");
     let thinking_str = thinking.join("\n");
 
-    let mut obj = serde_json::Map::new();
-    if text_str.is_empty() && !thinking_str.is_empty() {
-        // DeepSeek reasoning: no text block, use thinking as the reply
-        obj.insert("text".to_string(), serde_json::Value::String(thinking_str));
+    let display = if !text_str.is_empty() {
+        text_str.clone()
+    } else if !thinking_str.is_empty() {
+        thinking_str.clone()
     } else {
-        obj.insert("text".to_string(), serde_json::Value::String(text_str));
-        if !thinking_str.is_empty() {
-            obj.insert("thinking".to_string(), serde_json::Value::String(thinking_str));
+        // Check for error in the assistant message
+        if let Some(err) = msg.get("errorMessage").and_then(|e| e.as_str()) {
+            format!("Agent error: {}", err)
+        } else if let Some(reason) = msg.get("stopReason").and_then(|r| r.as_str()) {
+            if reason == "error" {
+                "Agent stopped with an error (check your API key)".to_string()
+            } else {
+                "(empty response)".to_string()
+            }
+        } else {
+            "(empty response)".to_string()
         }
+    };
+
+    let mut obj = serde_json::Map::new();
+    obj.insert("text".to_string(), serde_json::Value::String(display));
+    if !thinking_str.is_empty() {
+        obj.insert("thinking".to_string(), serde_json::Value::String(thinking_str));
     }
     serde_json::Value::Object(obj)
 }
