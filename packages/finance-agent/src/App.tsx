@@ -262,8 +262,16 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     try {
       const models = await invoke<Array<{provider: string; model_id: string; name: string}>>("list_available_models");
       setAvailableModels(models);
-      if (!currentModel && models.length > 0) {
-        setCurrentModel(`${models[0].provider}/${models[0].model_id}`);
+      // Try to restore saved model, fall back to first available
+      try {
+        const saved = await invoke<string | null>("get_current_model");
+        if (saved && models.some((m) => `${m.provider}/${m.model_id}` === saved)) {
+          setCurrentModel(saved);
+        } else if (models.length > 0) {
+          setCurrentModel(`${models[0].provider}/${models[0].model_id}`);
+        }
+      } catch {
+        if (models.length > 0) setCurrentModel(`${models[0].provider}/${models[0].model_id}`);
       }
     } catch {}
   }, []);
