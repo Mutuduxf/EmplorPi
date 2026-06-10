@@ -319,22 +319,14 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     return () => clearTimeout(timer);
   }, [themeMode]);
 
-  const send = async (textOverride?: string) => {
+  const send = async (textOverride?: string, skipUser?: boolean) => {
     const text = (textOverride ?? input).trim();
     if (!text || loading) return;
     setInput("");
     setLastUserText(text);
-    setMessages((m) => [...m, { role: "user", text }, { role: "assistant", text: "…" }]);
+    if (!skipUser) setMessages((m) => [...m, { role: "user", text }]);
+    setMessages((m) => [...m, { role: "assistant", text: "…" }]);
     setLoading(true);
-
-    let unlisten: (() => void) | undefined;
-    // Try streaming
-    try {
-      const { listen } = window.__TAURI__?.event || {};
-      if (listen) unlisten = await listen("stream:update", (e: any) => {
-        try { const p = JSON.parse(e.payload); if (typeof p === "object") { textRef.current = p.text ?? textRef.current; setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: textRef.current || "…", thinking: p.thinking }; return c; }); } } catch {}
-      });
-    } catch {}
 
     try {
       const raw = await invoke<string>("send_prompt", { text });
@@ -345,7 +337,6 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     } catch (e) {
       setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: `Error: ${e}` }; return c; });
     } finally {
-      unlisten?.();
       setLoading(false);
       loadSessions();
       try { const sp = await invoke<string | null>("get_session_path"); if (sp) setCurrentSessionPath(sp); } catch {}
@@ -359,8 +350,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
 
   const handleRegen = async () => {
     if (!lastUserText) return;
-    setMessages((prev) => prev.slice(0, -1));
-    send(lastUserText);
+    send(lastUserText, true);
   };
 
   const handleEdit = useCallback((idx: number, text: string) => { setEditingIdx(idx); setEditText(text); }, []);
