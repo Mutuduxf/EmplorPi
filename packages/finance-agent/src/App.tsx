@@ -320,7 +320,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     return () => clearTimeout(timer);
   }, [themeMode]);
 
-  const send = useCallback(async (overrideText?: string, skipUser?: boolean) => {
+  const send = async (overrideText?: string, skipUser?: boolean) => {
     const text = (overrideText ?? input).trim();
     if (!text || loading) return;
     setInput("");
@@ -370,7 +370,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
         if (sp) setCurrentSessionPath(sp);
       } catch {}
     }
-  }, [input, loading, loadSessions]);
+  };
 
   const newSession = useCallback(() => {
     setMessages([]);
@@ -385,7 +385,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   const handleRegen = useCallback(async () => {
     if (!lastUserText) return;
     send(lastUserText, true);
-  }, [lastUserText, send]);
+  }, [lastUserText]);
 
   const handleEdit = useCallback((idx: number, text: string) => {
     setEditingIdx(idx);
@@ -398,7 +398,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     setMessages((prev) => [...prev.slice(0, editingIdx), { role: "user", text: newText }]);
     setEditingIdx(null);
     send(newText, true);
-  }, [editingIdx, editText, send]);
+  }, [editingIdx, editText]);
 
   const handleSelectSession = useCallback(async (path: string) => {
     setCurrentSessionPath(path);
