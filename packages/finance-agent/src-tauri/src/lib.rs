@@ -232,6 +232,23 @@ fn list_available_models(app: tauri::AppHandle) -> Result<Vec<AvailableModel>, S
 }
 
 #[tauri::command]
+fn load_session_messages(path: String) -> Result<Vec<serde_json::Value>, String> {
+    if !std::path::Path::new(&path).exists() { return Ok(Vec::new()); }
+    let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let mut messages = Vec::new();
+    for line in content.lines() {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
+            if json.get("type").and_then(|t| t.as_str()) == Some("message") {
+                if let Some(msg) = json.get("message") {
+                    messages.push(msg.clone());
+                }
+            }
+        }
+    }
+    Ok(messages)
+}
+
+#[tauri::command]
 fn switch_model(provider: String, model_id: String) -> Result<(), String> {
     *CURRENT_MODEL.lock().unwrap() = Some(format!("{}/{}", provider, model_id));
     // Also save to settings so model persists across app restarts
@@ -398,7 +415,9 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
     let result = if let Some(ref msg) = last_assistant_msg {
         extract_content(msg)
     } else {
-        if all_output.is_empty() {
+        if ABORT_FLAG.load(Ordering::SeqCst) {
+            serde_json::json!({"text": "Generation stopped."})
+        } else if all_output.is_empty() {
             serde_json::json!({"text": "No response from agent."})
         } else {
             let lines: Vec<&str> = all_output.lines().collect();
@@ -408,8 +427,10 @@ async fn send_prompt(app: tauri::AppHandle, text: String) -> Result<String, Stri
             }).collect();
             if !errors.is_empty() {
                 serde_json::json!({"text": format!("Agent error: {}", errors.join("\n"))})
+            } else if lines.iter().any(|l| l.contains("assistant")) {
+                serde_json::json!({"text": "Generation was interrupted."})
             } else {
-                serde_json::json!({"text": format!("No assistant response.\\nRaw events:\\n{}", lines.join("\\n"))})
+                serde_json::json!({"text": "No response."})
             }
         }
     };
@@ -458,7 +479,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             check_auth_state, save_api_key, get_app_version, open_data_dir,
             send_prompt, list_sessions, delete_session, rename_session,
-            export_session, list_available_models, switch_model, get_current_model,
+            export_session, list_available_models, load_session_messages,
+            switch_model, get_current_model,
             set_system_prompt, get_system_prompt,
             get_settings, save_settings, get_session_path, save_export,
             abort_prompt, csv_to_excel,
