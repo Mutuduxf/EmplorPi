@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import ExportDialog from "./ExportDialog";
 import TokenUsage from "./TokenUsage";
 
@@ -320,9 +319,9 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     return () => clearTimeout(timer);
   }, [themeMode]);
 
-  const send = useCallback(async () => {
-    if (!input.trim() || loading) return;
-    const text = input;
+  const send = async () => {
+    const text = input.trim();
+    if (!text || loading) return;
     setInput("");
     setLastUserText(text);
     setMessages((m) => [...m, { role: "user", text }, { role: "assistant", text: "…" }]);
@@ -330,26 +329,24 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
 
     let unlisten: (() => void) | undefined;
     try {
-      unlisten = await listen<string>("stream:update", (e) => {
-        try {
-          const p = JSON.parse(e.payload);
-          if (typeof p === "object") {
-            textRef.current = p.text ?? textRef.current;
-            setMessages((prev) => {
-              const c = [...prev]; c[c.length - 1] = { role: "assistant", text: textRef.current || "…", thinking: p.thinking };
-              return c;
-            });
-          }
-        } catch {}
-      });
+      try {
+        const tauri = (window as any).__TAURI__;
+        if (tauri?.event?.listen) unlisten = await tauri.event.listen("stream:update", (e: any) => {
+          try {
+            const p = typeof e.payload === "string" ? JSON.parse(e.payload) : e.payload;
+            if (typeof p === "object") {
+              textRef.current = p.text ?? textRef.current;
+              setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: textRef.current || "…", thinking: p.thinking }; return c; });
+            }
+          } catch {}
+        });
+      } catch {}
 
       const raw = await invoke<string>("send_prompt", { text });
-      try {
-        const parsed = JSON.parse(raw);
-        if (typeof parsed === "object" && parsed.text !== undefined) {
-          setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: parsed.text, thinking: parsed.thinking }; return c; });
-        }
-      } catch {}
+      const parsed = JSON.parse(raw);
+      if (typeof parsed === "object" && parsed.text !== undefined) {
+        setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: parsed.text, thinking: parsed.thinking }; return c; });
+      }
     } catch (e) {
       setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: `Error: ${e}` }; return c; });
     } finally {
@@ -358,9 +355,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
       loadSessions();
       try { const sp = await invoke<string | null>("get_session_path"); if (sp) setCurrentSessionPath(sp); } catch {}
     }
-  }, [input, loading]);
-
-  // Regenerate last response
+  };
 
   const stopGeneration = useCallback(async () => {
     try { await invoke("abort_prompt"); } catch {}
@@ -369,21 +364,23 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
 
   const handleRegen = async () => {
     if (!lastUserText) return;
-    send(lastUserText, true);
+    setMessages((prev) => prev.slice(0, -1));
+    setInput(lastUserText);
+    setTimeout(() => send(), 0);
   };
 
-  const handleEdit = useCallback((idx: number, text: string) => {
-    setEditingIdx(idx);
-    setEditText(text);
-  }, []);
+  const handleEdit = useCallback((idx: number, text: string) => { setEditingIdx(idx); setEditText(text); }, []);
 
   const handleEditSend = async () => {
     if (editingIdx === null || !editText.trim()) return;
     const newText = editText.trim();
     setMessages((prev) => [...prev.slice(0, editingIdx), { role: "user", text: newText }]);
     setEditingIdx(null);
-    send(newText, true);
+    setInput(newText);
+    setTimeout(() => send(), 0);
   };
+
+  const newSession = useCallback(() => { setMessages([]); setCurrentSessionPath(undefined); }, []);
 
   const handleSelectSession = useCallback(async (path: string) => {
     setCurrentSessionPath(path);
