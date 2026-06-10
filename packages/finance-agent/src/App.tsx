@@ -114,7 +114,7 @@ function Sidebar({ sessions, currentPath, onNewChat, onSelectSession, onConfigur
   return (
     <div style={{ width: 260, height: "100%", display: "flex", flexDirection: "column", borderRight: "1px solid var(--border, #ddd)", background: "var(--sidebar-bg, #fafafa)", fontFamily: "system-ui", flexShrink: 0 }}>
       <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--border, #eee)" }}>
-        <button onClick={onNewChat} style={{ width: "100%", padding: "8px 0", borderRadius: 6, border: "1px solid var(--border, #ccc)", background: "var(--bg, #fff)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ New Chat</button>
+        <button onClick={onNewChat} style={{ width: "100%", padding: "8px 0", borderRadius: 6, border: "1px solid var(--border, #ccc)", background: "var(--bg, #fff)", color: "var(--text, #333)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ New Chat</button>
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…"
           style={{ width: "100%", marginTop: 6, padding: "5px 8px", borderRadius: 4, border: "1px solid var(--border, #ccc)", fontSize: 12, boxSizing: "border-box", background: "var(--bg, #fff)", color: "var(--text, #333)" }} />
       </div>
