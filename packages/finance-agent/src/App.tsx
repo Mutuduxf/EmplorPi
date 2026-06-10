@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import ExportDialog from "./ExportDialog";
 import TokenUsage from "./TokenUsage";
 
@@ -319,35 +320,47 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     return () => clearTimeout(timer);
   }, [themeMode]);
 
-  const send = async (overrideText?: string, skipUser?: boolean) => {
-    const text = (overrideText ?? input).trim();
-    if (!text || loading) return;
+  const send = useCallback(async () => {
+    if (!input.trim() || loading) return;
+    const text = input;
     setInput("");
     setLastUserText(text);
-    if (!skipUser) setMessages((m) => [...m, { role: "user", text }]);
-    setMessages((m) => [...m, { role: "assistant", text: "…" }]);
+    setMessages((m) => [...m, { role: "user", text }, { role: "assistant", text: "…" }]);
     setLoading(true);
 
+    let unlisten: (() => void) | undefined;
     try {
+      unlisten = await listen<string>("stream:update", (e) => {
+        try {
+          const p = JSON.parse(e.payload);
+          if (typeof p === "object") {
+            textRef.current = p.text ?? textRef.current;
+            setMessages((prev) => {
+              const c = [...prev]; c[c.length - 1] = { role: "assistant", text: textRef.current || "…", thinking: p.thinking };
+              return c;
+            });
+          }
+        } catch {}
+      });
+
       const raw = await invoke<string>("send_prompt", { text });
-      const parsed = JSON.parse(raw);
-      if (typeof parsed === "object" && parsed.text !== undefined) {
-        setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: parsed.text, thinking: parsed.thinking }; return c; });
-      }
+      try {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed === "object" && parsed.text !== undefined) {
+          setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: parsed.text, thinking: parsed.thinking }; return c; });
+        }
+      } catch {}
     } catch (e) {
-      const errMsg = typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e);
-      setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: `Error: ${errMsg}` }; return c; });
+      setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", text: `Error: ${e}` }; return c; });
     } finally {
+      unlisten?.();
       setLoading(false);
       loadSessions();
       try { const sp = await invoke<string | null>("get_session_path"); if (sp) setCurrentSessionPath(sp); } catch {}
     }
-  };
+  }, [input, loading]);
 
-  const newSession = useCallback(() => {
-    setMessages([]);
-    setCurrentSessionPath(undefined);
-  }, []);
+  // Regenerate last response
 
   const stopGeneration = useCallback(async () => {
     try { await invoke("abort_prompt"); } catch {}
