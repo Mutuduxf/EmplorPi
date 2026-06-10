@@ -320,6 +320,8 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
   }, [themeMode]);
 
   const send = async (overrideText?: string, skipUser?: boolean) => {
+    // Fire-and-forget log to confirm send() runs
+    invoke("frontend_log", { msg: "send() called" }).catch(() => {});
     const text = (overrideText ?? input).trim();
     if (!text || loading) return;
     setInput("");
