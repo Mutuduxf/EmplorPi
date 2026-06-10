@@ -320,12 +320,15 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     return () => clearTimeout(timer);
   }, [themeMode]);
 
-  const send = useCallback(async (overrideText?: string) => {
+  const send = useCallback(async (overrideText?: string, skipUser?: boolean) => {
     const text = (overrideText ?? input).trim();
     if (!text || loading) return;
     setInput("");
     setLastUserText(text);
-    setMessages((m) => [...m, { role: "user", text }, { role: "assistant", text: "…" }]);
+    if (!skipUser) {
+      setMessages((m) => [...m, { role: "user", text }]);
+    }
+    setMessages((m) => [...m, { role: "assistant", text: "…" }]);
     setLoading(true);
 
     let unlisten: (() => void) | undefined;
@@ -381,8 +384,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
 
   const handleRegen = useCallback(async () => {
     if (!lastUserText) return;
-    setMessages((prev) => prev.slice(0, -1));
-    send(lastUserText);
+    send(lastUserText, true);
   }, [lastUserText, send]);
 
   const handleEdit = useCallback((idx: number, text: string) => {
@@ -395,7 +397,7 @@ function ChatPage({ onConfigure }: { onConfigure: () => void }) {
     const newText = editText.trim();
     setMessages((prev) => [...prev.slice(0, editingIdx), { role: "user", text: newText }]);
     setEditingIdx(null);
-    send(newText);
+    send(newText, true);
   }, [editingIdx, editText, send]);
 
   const handleSelectSession = useCallback(async (path: string) => {
